@@ -1,0 +1,11 @@
+{
+  "sent_count": 500,
+  "recv_count": 500,
+  "packet_loss_pct": 0.0,
+  "actual_rate_hz": 183.30552920237895,
+  "min_rtt_ms": 0.4478000046219677,
+  "max_rtt_ms": 10.913800011621788,
+  "mean_rtt_ms": 1.2120915986597538,
+  "median_rtt_ms": 0.9879499993985519,
+  "jitter_stdev_ms": 0.8584433168511757
+}

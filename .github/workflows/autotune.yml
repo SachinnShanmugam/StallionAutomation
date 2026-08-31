@@ -1,0 +1,70 @@
+name: Stallion VTOL - Automated SITL Tuning & Replay CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: 'Number of Monte-Carlo Missions to Fly'
+        required: true
+        default: '5'
+
+jobs:
+  autotune_and_verify:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Python Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pymavlink numpy
+
+      - name: Install Gazebo Harmonic & ArduPilot Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lsb-release wget gnupg git build-essential
+          sudo wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y gz-harmonic libgz-sim8-dev
+
+      - name: Cache ArduPilot SITL Build
+        id: cache-sitl
+        uses: actions/cache@v4
+        with:
+          path: ~/ardupilot
+          key: ${{ runner.os }}-ardupilot-sitl-plane
+
+      - name: Clone & Build ArduPilot SITL (if not cached)
+        if: steps.cache-sitl.outputs.cache-hit != 'true'
+        run: |
+          git clone --recurse-submodules https://github.com/ArduPilot/ardupilot.git ~/ardupilot
+          cd ~/ardupilot
+          ./waf configure --board sitl
+          ./waf plane -j $(nproc)
+
+      - name: Run Automated Tuning Engine (AI-in-the-Loop Monte-Carlo Flights)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          mkdir -p logs params
+          python3 scripts/autotune_pipeline.py ${{ github.event.inputs.iterations || 3 }}
+
+      - name: Upload Hardened Parameters & Native Gazebo 3D State Log
+        uses: actions/upload-artifact@v4
+        with:
+          name: stallion-hardened-parameters
+          path: |
+            params/hardened_stallion_vtol.parm
+            logs/gazebo_recordings/state.tlog

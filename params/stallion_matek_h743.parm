@@ -1,0 +1,120 @@
+# ============================================================
+# Flightory Stallion VTOL — Physical Matek H743-Wing-V3 Config
+# Airframe: Tilt-Tricopter (2 Front Tilt + 1 Rear Fixed + Yaw Servo)
+# Firmware: ArduPlane (Target: MatekH743)
+# ============================================================
+
+# ==========================================
+# 1. QUADPLANE CORE & FRAME
+# ==========================================
+Q_ENABLE            1
+Q_FRAME_CLASS       7
+Q_FRAME_TYPE        0
+Q_TAILSIT_ENABLE    0
+
+# ==========================================
+# 2. TILT-ROTOR MECHANISM
+# ==========================================
+Q_TILT_ENABLE       1
+Q_TILT_TYPE         0
+Q_TILT_MASK         3
+Q_TILT_MAX          90
+Q_TILT_RATE_UP      40
+Q_TILT_RATE_DN      40
+Q_TILT_YAW_ANGLE    0
+Q_ASSIST_SPEED      -1
+
+# ==========================================
+# 3. MOTOR SPIN & HOVER
+# ==========================================
+Q_M_PWM_TYPE        0
+Q_M_SPIN_ARM        0.10
+Q_M_SPIN_MIN        0.15
+Q_M_THST_HOVER      0.42
+Q_M_HOVER_LEARN     2
+
+# ==========================================
+# 4. PHYSICAL SERVO / MOTOR PINS (Matek H743-Wing-V3 Silkscreen)
+#    S1  -> Motor 1 (Front-Right, CW)
+#    S2  -> Motor 2 (Front-Left, CCW)
+#    S3  -> Motor 4 (Rear, CCW)
+#    S4  -> Tilt Servos (Front Left + Front Right)
+#    S5  -> Rear Yaw Servo
+#    S6  -> Left Aileron (Elevon / Aileron)
+#    S7  -> Right Aileron / Elevator
+#    S8  -> Rudder
+# ==========================================
+SERVO1_FUNCTION     33
+SERVO2_FUNCTION     34
+SERVO3_FUNCTION     36
+SERVO4_FUNCTION     41
+SERVO5_FUNCTION     39
+SERVO6_FUNCTION     4
+SERVO7_FUNCTION     19
+SERVO8_FUNCTION     21
+
+# Tilt Servos (PWM 1000 = Vertical Hover, PWM 2000 = Horizontal Flight)
+SERVO4_MIN          1000
+SERVO4_MAX          2000
+SERVO4_TRIM         1000
+
+# Rear Yaw Servo (Center = 1500, +-15 deg tilt)
+SERVO5_MIN          1000
+SERVO5_MAX          2000
+SERVO5_TRIM         1500
+SERVO5_REVERSED     0
+
+# ==========================================
+# 5. HOVER PID & ATTITUDE TUNING (Stallion Validated)
+# ==========================================
+Q_A_ANG_RLL_P       6.0
+Q_A_ANG_PIT_P       6.0
+Q_A_ANG_YAW_P       2.5
+
+Q_A_RAT_RLL_P       0.25
+Q_A_RAT_RLL_I       0.25
+Q_A_RAT_RLL_D       0.004
+Q_A_RAT_RLL_FLTD    10.0
+
+Q_A_RAT_PIT_P       0.25
+Q_A_RAT_PIT_I       0.25
+Q_A_RAT_PIT_D       0.004
+Q_A_RAT_PIT_FLTD    10.0
+
+Q_A_RAT_YAW_P       0.18
+Q_A_RAT_YAW_I       0.05
+Q_A_RAT_YAW_D       0.002
+Q_A_RAT_YAW_FLTD    10.0
+
+# ==========================================
+# 6. AUTONOMOUS & NAVIGATION LIMITS (ArduPlane 4.7)
+# ==========================================
+Q_A_ANGLE_MAX       15.0
+Q_M_YAW_SV_ANGLE    15.0
+Q_A_RATE_WPY_MAX    20.0
+Q_A_RATE_Y_MAX      25.0
+Q_A_ACC_Y_MAX       35.0
+
+Q_WP_SPD            1.5
+Q_WP_SPD_UP         0.8
+Q_WP_SPD_DN         0.8
+Q_WP_ACC            0.5
+Q_WP_ACC_Z          0.5
+Q_WP_RADIUS_M       3.0
+
+Q_LOIT_ANG_MAX      15
+Q_LOIT_SPEED_MS     5.0
+Q_LOIT_ACC_MAX_M    2.5
+
+# ==========================================
+# 7. MATEK H743 ONBOARD HARDWARE SPECIFICS
+# ==========================================
+# Battery Monitor 1 (Matek H743 built-in current sensor pad)
+BATT_MONITOR        4
+BATT_VOLT_PIN       14
+BATT_CURR_PIN       15
+BATT_VOLT_MULT      11.0
+BATT_AMP_PERVLT     40.0
+
+# Return to Launch
+Q_RTL_MODE          3

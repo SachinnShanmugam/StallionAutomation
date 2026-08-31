@@ -1,0 +1,28 @@
+# Stallion VTOL - Auto-Tuned Hardened Parameters
+# Optimized via Monte-Carlo SITL Engine on 2026-08-31 19:28:27
+# Best Cost Score: 7.2162
+
+Q_POS_XY_P           1.20000
+Q_VEL_XY_P           1.40000
+Q_VEL_XY_I           0.60000
+Q_VEL_XY_D           0.30000
+Q_LOIT_SPEED_MS      2.00000
+Q_LOIT_ACC_MAX       150.00000
+Q_LOIT_BRK_ACCEL     150.00000
+Q_LOIT_BRK_JERK      500.00000
+Q_VELZ_P             5.50000
+Q_ACCZ_P             0.35000
+Q_ACCZ_I             0.70000
+Q_M_THST_HOVER       0.45000
+Q_A_ANG_RLL_P        5.50000
+Q_A_ANG_PIT_P        5.50000
+Q_A_ANG_YAW_P        4.00000
+Q_A_RAT_RLL_P        0.18500
+Q_A_RAT_RLL_I        0.05000
+Q_A_RAT_RLL_D        0.00650
+Q_A_RAT_PIT_P        0.18500
+Q_A_RAT_PIT_I        0.05000
+Q_A_RAT_PIT_D        0.00650
+Q_A_RAT_YAW_P        0.22000
+Q_A_RAT_YAW_I        0.03000
+Q_A_RAT_YAW_D        0.00600

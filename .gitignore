@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+venv/
+ENV/
+
+# Temporary simulation outputs & caches
+logs/
+*.log
+*.tlog
+*.bin
+*.out
+*.7z
+*.mp4
+flight_replay.html
+flight_video.mp4
+/tmp/
+build/
+dist/
+.cache/
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
