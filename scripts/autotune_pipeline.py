@@ -23,10 +23,35 @@ import urllib.request
 import urllib.error
 from pymavlink import mavutil
 
-WSL_ARDUPILOT = '/home/drones/ardupilot'
-WORLD_PATH = '/mnt/c/Users/SACHIN/Stallion/gazebo/worlds/stallion_runway.sdf'
-PARAM_FILE = '/mnt/c/Users/SACHIN/Stallion/params/stallion_vtol_sitl.parm'
-REC_DIR = '/mnt/c/Users/SACHIN/Stallion/logs/gazebo_recordings'
+REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+WORLD_PATH = os.path.join(REPO_DIR, 'gazebo', 'worlds', 'stallion_runway.sdf')
+PARAM_FILE = os.path.join(REPO_DIR, 'params', 'stallion_vtol_sitl.parm')
+REC_DIR = os.path.join(REPO_DIR, 'logs', 'gazebo_recordings')
+
+# Detect ArduPilot and ArduPilotPlugin paths
+def get_ardupilot_dir():
+    candidates = [
+        os.path.expanduser('~/ardupilot'),
+        '/home/drones/ardupilot',
+        '/home/runner/ardupilot'
+    ]
+    for c in candidates:
+        if os.path.exists(os.path.join(c, 'build', 'sitl', 'bin', 'arduplane')):
+            return c
+    return candidates[0]
+
+def get_plugin_dir():
+    candidates = [
+        os.path.expanduser('~/ardupilot_gazebo/build'),
+        '/home/drones/ardupilot_gazebo/build',
+        '/home/runner/ardupilot_gazebo/build'
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return candidates[0]
+
+WSL_ARDUPILOT = get_ardupilot_dir()
 
 class AIFlightOptimizer:
     """
@@ -138,14 +163,14 @@ def run_single_mission(mission_id, candidate_params, wind_speed=0.0, speedup=1):
     # 1. Clean old processes & prepare temp record dir on Linux ext4 home
     subprocess.run("killall -9 gz-sim-server gz-sim-gui arduplane 2>/dev/null; sleep 1", shell=True)
     time.sleep(1.0)
-    home_rec = f"/home/drones/gazebo_recordings_m{mission_id}"
+    home_rec = os.path.expanduser(f"~/gazebo_recordings_m{mission_id}")
     subprocess.run(f"rm -rf {home_rec} && mkdir -p {home_rec}", shell=True)
 
     # 2. Launch Gazebo Headless Server with 3D State Recording (20 Hz sampling)
     print("    [INIT] Launching Gazebo physics server with 3D recording (20 Hz)...")
     env = os.environ.copy()
-    env["GZ_SIM_SYSTEM_PLUGIN_PATH"] = "/home/drones/ardupilot_gazebo/build"
-    env["GZ_SIM_RESOURCE_PATH"] = "/mnt/c/Users/SACHIN/Stallion/gazebo/models"
+    env["GZ_SIM_SYSTEM_PLUGIN_PATH"] = get_plugin_dir()
+    env["GZ_SIM_RESOURCE_PATH"] = os.path.join(REPO_DIR, "gazebo", "models")
     gz_proc = subprocess.Popen(
         f"gz sim -s -r --record-path {home_rec} --record-period 0.05 --log-overwrite {WORLD_PATH}",
         shell=True,
@@ -421,7 +446,7 @@ def run_autotune_batch(num_iterations=5):
                 print(f"    ⭐ [NEW OPTIMAL ZERO-DRIFT CONFIG FOUND!] Cost: {best_cost:.3f} (RMS Pos: {result['rms_pos']:.3f}m, Max Drift: {result['max_pos_drift']:.3f}m)")
 
     # 1. Export Hardened Parameter File
-    parm_file = '/mnt/c/Users/SACHIN/Stallion/params/hardened_stallion_vtol.parm'
+    parm_file = os.path.join(REPO_DIR, 'params', 'hardened_stallion_vtol.parm')
     with open(parm_file, 'w') as f:
         f.write("# Stallion VTOL - Auto-Tuned Hardened Parameters\n")
         f.write(f"# Optimized via Monte-Carlo SITL Engine on {time.strftime('%Y-%m-%d %H:%M:%S')}\n")

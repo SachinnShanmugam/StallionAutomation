@@ -28,7 +28,7 @@ jobs:
       - name: Install Python Dependencies
         run: |
           pip install --upgrade pip
-          pip install pymavlink numpy
+          pip install pymavlink numpy "empy==3.3.4" pexpect future
 
       - name: Install Gazebo Harmonic & ArduPilot Dependencies
         run: |
@@ -53,6 +53,14 @@ jobs:
           cd ~/ardupilot
           ./waf configure --board sitl
           ./waf plane -j $(nproc)
+
+      - name: Build ArduPilot Gazebo Plugin
+        run: |
+          git clone https://github.com/ArduPilot/ardupilot_gazebo.git ~/ardupilot_gazebo || true
+          cd ~/ardupilot_gazebo
+          mkdir -p build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          make -j $(nproc)
 
       - name: Run Automated Tuning Engine (AI-in-the-Loop Monte-Carlo Flights)
         env:
