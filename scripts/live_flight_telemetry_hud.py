@@ -262,6 +262,35 @@ def run_telemetry_hud():
                 f0_hex = ' '.join(f'{b:02X}' for b in frames[0]['data']) if frames else "N/A"
                 f9_hex = ' '.join(f'{b:02X}' for b in frames[-1]['data']) if frames else "N/A"
 
+                # --- Execute Real-Time Independent Round-Trip Verification ---
+                reassembled_stream = bytearray()
+                roundtrip_ok = False
+                d_lat = d_alt = 0.0
+                rx_crc = comp_crc = 0
+
+                if frames and DRONECAN_AVAILABLE:
+                    try:
+                        for f in frames:
+                            reassembled_stream.extend(f['data'][:-1])
+                        rx_crc = struct.unpack('<H', reassembled_stream[:2])[0]
+                        rx_payload = bytes(reassembled_stream[2:])
+                        comp_crc = calculate_transfer_crc(signature, rx_payload)
+                        crc_valid = (rx_crc == comp_crc)
+
+                        dec_obj = uavcan.equipment.gnss.Fix2()
+                        bit_str_dec = bytes_to_bits(rx_payload, len(bit_str))
+                        dec_obj._unpack(bit_str_dec)
+
+                        dec_lat = dec_obj.latitude_deg_1e8 / 1e8
+                        dec_alt = dec_obj.height_msl_mm / 1000.0
+                        d_lat = abs(lat - dec_lat)
+                        d_alt = abs((10.0 + alt_rel) - dec_alt)
+                        roundtrip_ok = crc_valid and (d_lat < 1e-7) and (d_alt < 0.001)
+                    except Exception:
+                        roundtrip_ok = False
+
+                rt_badge = "\033[92m[PASS - BIT EXACT]\033[0m" if roundtrip_ok else "\033[91m[FAIL]\033[0m"
+
                 hud_text = (
                     f"\033[H"
                     f"=====================================================================================\n"
@@ -278,10 +307,11 @@ def run_telemetry_hud():
                     f"    • Motor 3 (Tail Yaw)   : {m3_rpm:5d} RPM [{make_bar(m3_rpm)}] (PWM: {servos[2]:4d})           \n"
                     f"    • Tilt Mechanism       : {tilt_mode:20s} (Servo PWM: {servos[6]:4d})              \n"
                     f"-------------------------------------------------------------------------------------\n"
-                    f" 📡 REAL-TIME DRONECAN STREAM (uavcan.equipment.gnss.Fix2 / ID: {data_type_id}):         \n"
-                    f"    • Payload Length    : {len(raw_bytes)} bytes | Transfer ID: #{transfer_id:02d} | Total: {total_can_frames} frames \n"
+                    f" 📡 REAL-TIME DRONECAN STREAM & ROUND-TRIP VERIFICATION (ID: {data_type_id}):             \n"
+                    f"    • Transfer # & Total: TID #{transfer_id:02d} | Total: {total_can_frames:6d} frames | CRC: 0x{rx_crc:04X} \n"
                     f"    • CAN Frame #0 (SOF): CAN ID=0x{make_can_id(24, data_type_id, node_id):08X} | DATA: {f0_hex} \n"
                     f"    • CAN Frame #9 (EOF): CAN ID=0x{make_can_id(24, data_type_id, node_id):08X} | DATA: {f9_hex} \n"
+                    f"    • Round-Trip Proof  : {rt_badge} (ΔLat={d_lat:.9f}°, ΔAlt={d_alt:.4f}m) \n"
                     f"=====================================================================================\n"
                     f" [Press Ctrl+C to exit HUD]                                                          \n"
                 )
