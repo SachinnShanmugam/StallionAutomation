@@ -79,3 +79,5 @@ jobs:
           path: |
             params/hardened_stallion_vtol.parm
             logs/gazebo_recordings/state.tlog
+            logs/FLIGHT_TEST_SUMMARY_REPORT.md
+            logs/flight_test_summary.json
