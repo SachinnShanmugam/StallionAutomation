@@ -378,8 +378,8 @@ def run_autotune_batch(num_iterations=5):
     print("=" * 80)
     print("  STALLION VTOL - AUTOMATED QLOITER GPS LOCK & PARAMETER OPTIMIZER")
     print("=" * 80)
-    os.makedirs('/mnt/c/Users/SACHIN/Stallion/logs', exist_ok=True)
-    os.makedirs('/mnt/c/Users/SACHIN/Stallion/params', exist_ok=True)
+    os.makedirs(os.path.join(REPO_DIR, 'logs'), exist_ok=True)
+    os.makedirs(os.path.join(REPO_DIR, 'params'), exist_ok=True)
 
     # Complete Tuned Parameter Space for Zero-Drift QLOITER
     best_params = {
@@ -464,7 +464,7 @@ def run_autotune_batch(num_iterations=5):
     print(f" Optimized Parameters:")
     for k, v in best_params.items():
         print(f"   {k:20s} = {v:.4f}")
-    print(f" Native Gazebo Recording:  c:\\Users\\SACHIN\\Stallion\\logs\\gazebo_recordings\\state.tlog")
+    print(f" Native Gazebo Recording:  {REC_DIR}/state.tlog")
     print("=" * 80)
 
 if __name__ == '__main__':
