@@ -337,10 +337,8 @@ def run_single_mission(mission_id, candidate_params, wind_speed=0.0, speedup=1):
     except Exception:
         pass
 
-    # Copy completed state.tlog to Windows mount
-    os.makedirs(REC_DIR, exist_ok=True)
-    if os.path.exists(f"{home_rec}/state.tlog"):
-        subprocess.run(f"cp -f {home_rec}/state.tlog {REC_DIR}/state.tlog", shell=True)
+    # Save raw state.tlog inside mission-specific folder
+    os.makedirs(home_rec, exist_ok=True)
 
     # Compute Cost Function Score (Prioritizes ZERO GPS Drift & Smooth Attitude)
     rms_pos = math.sqrt(sum(p**2 for p in pos_errors) / max(1, len(pos_errors))) if pos_errors else 0.0
@@ -419,6 +417,8 @@ def run_autotune_batch(num_iterations=5):
     best_cost = 9999.0
     all_runs = []
 
+    best_mission_id = 1
+
     for i in range(1, num_iterations + 1):
         if i == 1:
             candidate = dict(best_params)
@@ -444,7 +444,15 @@ def run_autotune_batch(num_iterations=5):
             if result['cost_score'] < best_cost:
                 best_cost = result['cost_score']
                 best_params = candidate
+                best_mission_id = i
                 print(f"    ⭐ [NEW OPTIMAL ZERO-DRIFT CONFIG FOUND!] Cost: {best_cost:.3f} (RMS Pos: {result['rms_pos']:.3f}m, Max Drift: {result['max_pos_drift']:.3f}m)")
+
+    # Copy the BEST mission's 3D recording to the output directory
+    best_home_rec = os.path.expanduser(f"~/gazebo_recordings_m{best_mission_id}")
+    os.makedirs(REC_DIR, exist_ok=True)
+    if os.path.exists(f"{best_home_rec}/state.tlog"):
+        subprocess.run(f"cp -f {best_home_rec}/state.tlog {REC_DIR}/state.tlog", shell=True)
+        print(f"\n [OK] Exported 3D Gazebo Recording from Mission #{best_mission_id} (Best Performance Flight)")
 
     # Generate Comprehensive Flight Test & Optimization Summary Report
     generate_flight_test_report(all_runs, initial_baseline_params, best_params, best_cost)
