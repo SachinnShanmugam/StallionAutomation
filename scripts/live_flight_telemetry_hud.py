@@ -123,11 +123,15 @@ def make_bar(val: float, max_val: float = 8000.0, width: int = 15) -> str:
 # ==============================================================================
 
 def run_telemetry_hud():
+    # Enable ANSI VT100 processing in Windows console
+    if os.name == 'nt':
+        os.system('')
+
     node_id = 42
     data_type_id = uavcan.equipment.gnss.Fix2.default_dtid if DRONECAN_AVAILABLE else 1063
     signature = uavcan.equipment.gnss.Fix2.get_data_type_signature() if DRONECAN_AVAILABLE else 0xCA41E7000F37435F
 
-    print("\033[2J\033[H", end="") # Clear terminal
+    os.system('cls' if os.name == 'nt' else 'clear')
     print("=" * 85)
     print("  STALLION VTOL - REAL-TIME PARALLEL TELEMETRY & DRONECAN HUD")
     print("=" * 85)
@@ -258,27 +262,31 @@ def run_telemetry_hud():
                 f0_hex = ' '.join(f'{b:02X}' for b in frames[0]['data']) if frames else "N/A"
                 f9_hex = ' '.join(f'{b:02X}' for b in frames[-1]['data']) if frames else "N/A"
 
-                print("\033[H", end="") # Move cursor to top without scrolling
-                print("=" * 85)
-                print(f"  STALLION VTOL LIVE FLIGHT TELEMETRY HUD   |   DRONECAN NODE ID: {node_id}")
-                print("=" * 85)
-                print(f" 🛩️  FLIGHT STATE:   Mode: \033[1m\033[96m{mode_str:12s}\033[0m | State: {armed_str:18s} | EKF3: {ekf_badge}")
-                print(f" 🧭 ATTITUDE:       Roll: {roll:+6.1f}° | Pitch: {pitch:+6.1f}° | Yaw: {yaw:+6.1f}°")
-                print(f" 📈 ALT & SPEED:    Alt: {alt_rel:6.2f} m | Climb: {climb_rate:+5.2f} m/s | Speed: {groundspeed:5.2f} m/s")
-                print(f" 📍 GPS LOCATION:   Lat: {lat:10.7f}° | Lon: {lon:10.7f}° | Sats: {sats:2d} | HDOP: {hdop:4.2f}")
-                print("-" * 85)
-                print(" ⚙️  VTOL ACTUATORS & MOTORS:")
-                print(f"    • Motor 1 (Front Left) : {m1_rpm:5d} RPM [{make_bar(m1_rpm)}] (PWM: {servos[0]})")
-                print(f"    • Motor 2 (Front Right): {m2_rpm:5d} RPM [{make_bar(m2_rpm)}] (PWM: {servos[1]})")
-                print(f"    • Motor 3 (Tail Yaw)   : {m3_rpm:5d} RPM [{make_bar(m3_rpm)}] (PWM: {servos[2]})")
-                print(f"    • Tilt Mechanism       : {tilt_mode:20s} (Servo PWM: {servos[6]})")
-                print("-" * 85)
-                print(f" 📡 REAL-TIME DRONECAN STREAM (uavcan.equipment.gnss.Fix2 / ID: {data_type_id}):")
-                print(f"    • Payload Length    : {len(raw_bytes)} bytes | Transfer ID: #{transfer_id:02d} | Total Frames: {total_can_frames}")
-                print(f"    • CAN Frame #0 (SOF): CAN ID=0x{make_can_id(24, data_type_id, node_id):08X} | DATA: {f0_hex}")
-                print(f"    • CAN Frame #9 (EOF): CAN ID=0x{make_can_id(24, data_type_id, node_id):08X} | DATA: {f9_hex}")
-                print("=" * 85)
-                print(" [Press Ctrl+C to exit HUD]")
+                hud_text = (
+                    f"\033[H"
+                    f"=====================================================================================\n"
+                    f"  STALLION VTOL LIVE FLIGHT TELEMETRY HUD   |   DRONECAN NODE ID: {node_id}\n"
+                    f"=====================================================================================\n"
+                    f" 🛩️  FLIGHT STATE:   Mode: \033[1m\033[96m{mode_str:12s}\033[0m | State: {armed_str:18s} | EKF3: {ekf_badge}     \n"
+                    f" 🧭 ATTITUDE:       Roll: {roll:+6.1f}° | Pitch: {pitch:+6.1f}° | Yaw: {yaw:+6.1f}°          \n"
+                    f" 📈 ALT & SPEED:    Alt: {alt_rel:6.2f} m | Climb: {climb_rate:+5.2f} m/s | Speed: {groundspeed:5.2f} m/s     \n"
+                    f" 📍 GPS LOCATION:   Lat: {lat:10.7f}° | Lon: {lon:10.7f}° | Sats: {sats:2d} | HDOP: {hdop:4.2f} \n"
+                    f"-------------------------------------------------------------------------------------\n"
+                    f" ⚙️  VTOL ACTUATORS & MOTORS:                                                         \n"
+                    f"    • Motor 1 (Front Left) : {m1_rpm:5d} RPM [{make_bar(m1_rpm)}] (PWM: {servos[0]:4d})           \n"
+                    f"    • Motor 2 (Front Right): {m2_rpm:5d} RPM [{make_bar(m2_rpm)}] (PWM: {servos[1]:4d})           \n"
+                    f"    • Motor 3 (Tail Yaw)   : {m3_rpm:5d} RPM [{make_bar(m3_rpm)}] (PWM: {servos[2]:4d})           \n"
+                    f"    • Tilt Mechanism       : {tilt_mode:20s} (Servo PWM: {servos[6]:4d})              \n"
+                    f"-------------------------------------------------------------------------------------\n"
+                    f" 📡 REAL-TIME DRONECAN STREAM (uavcan.equipment.gnss.Fix2 / ID: {data_type_id}):         \n"
+                    f"    • Payload Length    : {len(raw_bytes)} bytes | Transfer ID: #{transfer_id:02d} | Total: {total_can_frames} frames \n"
+                    f"    • CAN Frame #0 (SOF): CAN ID=0x{make_can_id(24, data_type_id, node_id):08X} | DATA: {f0_hex} \n"
+                    f"    • CAN Frame #9 (EOF): CAN ID=0x{make_can_id(24, data_type_id, node_id):08X} | DATA: {f9_hex} \n"
+                    f"=====================================================================================\n"
+                    f" [Press Ctrl+C to exit HUD]                                                          \n"
+                )
+                sys.stdout.write(hud_text)
+                sys.stdout.flush()
 
             time.sleep(0.01)
 
