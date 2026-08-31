@@ -171,8 +171,9 @@ def run_single_mission(mission_id, candidate_params, wind_speed=0.0, speedup=1):
     env = os.environ.copy()
     env["GZ_SIM_SYSTEM_PLUGIN_PATH"] = get_plugin_dir()
     env["GZ_SIM_RESOURCE_PATH"] = os.path.join(REPO_DIR, "gazebo", "models")
+    gz_cmd = f"exec gz sim -s -r --record-path {home_rec} --record-period 0.05 --log-overwrite {WORLD_PATH}"
     gz_proc = subprocess.Popen(
-        f"gz sim -s -r --record-path {home_rec} --record-period 0.05 --log-overwrite {WORLD_PATH}",
+        gz_cmd,
         shell=True,
         env=env,
         preexec_fn=os.setsid
@@ -330,10 +331,9 @@ def run_single_mission(mission_id, candidate_params, wind_speed=0.0, speedup=1):
 
     # 10. Cleanly shutdown Gazebo with SIGINT to finalize recording
     try:
-        os.killpg(os.getpgid(gz_proc.pid), signal.SIGINT)
-        os.killpg(os.getpgid(sitl_proc.pid), signal.SIGINT)
-        gz_proc.wait(timeout=4)
-        sitl_proc.wait(timeout=3)
+        subprocess.run("kill -SIGINT $(pgrep -f 'gz-sim-server|ruby.*gz') 2>/dev/null || true", shell=True)
+        time.sleep(3.0)
+        subprocess.run("killall -9 arduplane 2>/dev/null || true", shell=True)
     except Exception:
         pass
 

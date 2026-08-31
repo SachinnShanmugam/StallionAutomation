@@ -1,7 +1,13 @@
 @echo off
 REM =========================================================================
-REM Stallion VTOL - Native Gazebo 3D Flight Replay Launcher (Windows)
+REM Stallion VTOL - Record & Replay 3D Flight Launcher
 REM =========================================================================
+echo =========================================================================
+echo  Recording Fresh 3D VTOL Mission in Gazebo...
+echo =========================================================================
+
+wsl -d Ubuntu-22.04 python3 /mnt/c/Users/SACHIN/Stallion/scripts/record_flight_for_replay.py
+
 echo =========================================================================
 echo  Launching Native Gazebo 3D Flight Replay GUI...
 echo =========================================================================
