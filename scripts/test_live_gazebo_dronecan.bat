@@ -6,6 +6,7 @@ echo =========================================================================
 echo  Launching Live Gazebo to DroneCAN GPS Real-Time Serialization Suite...
 echo =========================================================================
 
-python scripts\test_live_gazebo_dronecan.py 15
+cd /d "%~dp0\.."
+python "%~dp0test_live_gazebo_dronecan.py" 15
 
 pause

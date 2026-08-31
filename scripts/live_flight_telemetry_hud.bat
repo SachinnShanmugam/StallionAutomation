@@ -7,6 +7,7 @@ echo  Launching Live Flight Telemetry and DroneCAN HUD...
 echo  (Keep this open while flying SITL in your other terminal!)
 echo =========================================================================
 
-python scripts\live_flight_telemetry_hud.py
+cd /d "%~dp0\.."
+python "%~dp0live_flight_telemetry_hud.py"
 
 pause
