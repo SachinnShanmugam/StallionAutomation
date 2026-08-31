@@ -33,7 +33,7 @@ jobs:
       - name: Install Gazebo Harmonic & ArduPilot Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y lsb-release wget gnupg git build-essential
+          sudo apt-get install -y lsb-release wget gnupg git build-essential xvfb
           sudo wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
           sudo apt-get update
@@ -56,7 +56,8 @@ jobs:
 
       - name: Build ArduPilot Gazebo Plugin
         run: |
-          git clone https://github.com/ArduPilot/ardupilot_gazebo.git ~/ardupilot_gazebo || true
+          rm -rf ~/ardupilot_gazebo
+          git clone https://github.com/ArduPilot/ardupilot_gazebo.git ~/ardupilot_gazebo
           cd ~/ardupilot_gazebo
           mkdir -p build && cd build
           cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
@@ -65,9 +66,11 @@ jobs:
       - name: Run Automated Tuning Engine (AI-in-the-Loop Monte-Carlo Flights)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GZ_SIM_SYSTEM_PLUGIN_PATH: /home/runner/ardupilot_gazebo/build
+          GZ_SIM_RESOURCE_PATH: ${{ github.workspace }}/gazebo/models
         run: |
           mkdir -p logs params
-          python3 scripts/autotune_pipeline.py ${{ github.event.inputs.iterations || 3 }}
+          xvfb-run -a python3 scripts/autotune_pipeline.py ${{ github.event.inputs.iterations || 3 }}
 
       - name: Upload Hardened Parameters & Native Gazebo 3D State Log
         uses: actions/upload-artifact@v4
