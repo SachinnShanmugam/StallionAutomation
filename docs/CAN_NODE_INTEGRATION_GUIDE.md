@@ -1,52 +1,113 @@
-# Stallion VTOL - Gazebo to CAN Bus Interface & Telemetry Node
-================================================================
+# Stallion VTOL - Hybrid HIL Architecture & DroneCAN Node Integration Guide
+================================================================================
 
-This document details the CAN Bus channel mapping, packet architecture, and node implementation for extracting live physics telemetry from Gazebo and streaming to external hardware flight controllers (STM32, Matek H743, Pixhawk, Raspberry Pi) via standard CAN 2.0B / CAN FD / DroneCAN.
-
----
-
-## 1. CAN Channel Architecture & Message IDs
-
-| CAN ID | Name | DLC | Frequency | Description | Bit Layout & Units |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **`0x101`** | `CAN_IMU_ACCEL` | 8 | 50 Hz | Body Accelerations & Seq | `int16 ax, ay, az` (0.01 m/s²), `uint16 seq` |
-| **`0x102`** | `CAN_IMU_GYRO` | 8 | 50 Hz | Angular Rates & Temp | `int16 gx, gy, gz` (0.001 rad/s), `int16 temp` (0.1 °C) |
-| **`0x110`** | `CAN_ATTITUDE` | 8 | 50 Hz | Euler Attitude & Status | `int16 roll, pitch, yaw` (0.01°), `uint16 flags` |
-| **`0x120`** | `CAN_BARO_AIRSPEED`| 8 | 50 Hz | Pressure Alt & Pitot | `int32 press_alt` (cm), `uint16 airspeed` (mm/s), `int16 temp` (0.1 °C) |
-| **`0x131`** | `CAN_GPS_POS` | 8 | 10 Hz | Navigation Coordinates | `int32 lat, lon` (1e-7 deg) |
-| **`0x132`** | `CAN_GPS_VEL_ALT` | 8 | 10 Hz | GPS Altitude & Speed | `int32 alt` (cm), `uint16 speed` (cm/s), `uint16 heading` (0.1°) |
-| **`0x140`** | `CAN_ESC_STATUS_1`| 6 | 50 Hz | Front Motors & Voltage | `uint16 m1_rpm, m2_rpm`, `uint16 volts` (0.01V) |
-| **`0x141`** | `CAN_ESC_STATUS_2`| 6 | 50 Hz | Rear Motor & Tilt Angles | `uint16 m3_rpm`, `int16 tilt_l, tilt_r` (0.01°) |
-| **`0x200`** | `CAN_ACTUATOR_CMD`| 8 | 50 Hz | Hardware Control (Rx) | `uint16 m1, m2, m3, servo` (1000–2000 µs PWM) |
+This document establishes the verified hardware-in-the-loop (HIL) architecture and DroneCAN sensor node implementation for the Stallion Tilt-Rotor VTOL using the Matek H743 flight controller and Gazebo Harmonic simulation.
 
 ---
 
-## 2. Running the Gazebo-to-CAN Node
-
-### A. Start the CAN Bridge Node
-```bash
-python3 scripts/can_gazebo_bridge.py
-```
-* Ingests live physics from Gazebo.
-* Broadcasts formatted CAN frames over hardware CAN (`socketcan` / `vcan0` / `slcan`) and UDP CAN-over-IP (`127.0.0.1:10005`).
-
-### B. Start the CAN Subscriber / Controller Node
-```bash
-python3 scripts/test_can_controller_node.py 10
-```
-* Subscribes to CAN frames.
-* Decodes and displays live Roll/Pitch/Yaw, Baro Altitude, GPS coordinates, and ESC RPMs in real-time.
-
----
-
-## 3. Hardware Transceiver Pinout (STM32 / Matek H743)
+## 1. Verified Hybrid HIL Architecture
 
 ```text
-       [ Matek H743 / STM32 ]                    [ Physical CAN Bus ]
-       ┌─────────────────────┐                  ┌──────────────────┐
-       │ CAN1_TX  (PD1)      │ ───► TXD ──┐     │ CAN_H  (Pin 7)   │ ───────► (To Node)
-       │ CAN1_RX  (PD0)      │ ◄─── RXD ──┤TJA  │ CAN_L  (Pin 2)   │ ───────► (To Node)
-       │ GND                 │ ───────────┤1051 │ 120Ω Term Res    │
-       │ +5V                 │ ───────────┤XCVR │ GND              │
-       └─────────────────────┘            └───┴─┴──────────────────┘
+                             GAZEBO HARMONIC
+                                    │
+                 ┌──────────────────┴──────────────────┐
+                 ↓                                     ↓
+           High-Rate IMU                       Lower-Rate Sensors
+         (Gyro + Accel Physics)                 (GPS / Mag / Baro)
+                 │                                     │
+                 ↓                                     ↓
+         Ethernet / SoH Path                      DroneCAN Path
+     (JSON FDM @ 400 Hz Lockstep)          (uavcan.equipment.gnss.Fix2)
+                 │                                     │
+                 ↓                                     ↓
+         Matek H743 HAL                          Matek CAN Driver
+     (AP_HAL_ChibiOS SimOnHardware)            (AP_GPS_DroneCAN Driver)
+                 │                                     │
+                 └──────────────────┬──────────────────┘
+                                    ↓
+                                  EKF3
+                                    ↓
+                          ArduPilot Control Loops
 ```
+
+---
+
+## 2. Architectural Boundary & Driver Reality
+
+> **Important Driver Note:**  
+> Stock ArduPilot does **not** provide a generic DroneCAN `RawIMU` (`#1003`) $\to$ `AP_InertialSensor` driver for using DroneCAN as the primary flight control IMU.  
+> Primary rate-loop IMUs in ArduPilot expect local high-speed SPI/DMA sampling or `SimOnHardware` HAL injection.  
+> 
+> Therefore, we strictly separate the HIL transport into:
+> * **High-Rate IMU (Gyros & Accels):** Handled via **`SimOnHardware` / Ethernet** (Phase 2).
+> * **Lower-Rate Sensors (GPS, Compass, Baro):** Handled via **DroneCAN Peripheral Drivers** (Phase 3).
+
+---
+
+## 3. Supported & Verified DroneCAN Message Matrix
+
+Inspected directly against the local ArduPilot source code (`/home/drones/ardupilot`):
+
+| Sensor Type | DroneCAN Message Expected | DSDL Message ID | Signature | ArduPilot Driver | Status |
+| :--- | :--- | :---: | :---: | :--- | :---: |
+| **GPS / GNSS** | `uavcan.equipment.gnss.Fix2` | `1063` (`0x0427`) | `0xCA41E7000F37435F` | `AP_GPS_DroneCAN` | ✅ **VERIFIED** |
+| **Compass / Mag** | `uavcan.equipment.ahrs.MagneticFieldStrength2` | `1002` (`0x03EA`) | `0x47B0FB5819777E44` | `AP_Compass_DroneCAN` | ✅ Supported |
+| **Barometer** | `uavcan.equipment.air_data.StaticPressure` | `1028` (`0x0404`) | `0xCE8CEBE24B022206` | `AP_Baro_DroneCAN` | ✅ Supported |
+| **Airspeed (Pitot)** | `uavcan.equipment.air_data.TrueAirspeed` | `1020` (`0x03FC`) | `0x32130CE2F67448D6` | `AP_Airspeed_DroneCAN` | ✅ Supported |
+| **ESC RPM / Status** | `uavcan.equipment.esc.Status` | `1034` (`0x040A`) | `0xA9A662369B566542` | `AP_ESC_DroneCAN` | ✅ Supported |
+
+---
+
+## 4. DroneCAN GPS Node Implementation (`scripts/dronecan_gps_node.py`)
+
+* **Node ID:** `42`
+* **Message Type:** `uavcan.equipment.gnss.Fix2` (62 Bytes binary payload)
+* **CAN Framing:** 10 Multi-Frame CAN 2.0B Extended Frames (`CAN ID: 0x1804272A` with CCITT-CRC16 and protocol tail bytes)
+* **Verification:** Built-in lossless roundtrip decode verification ($\Delta Lat = 0.000000000^\circ$).
+
+### Running Locally (Without CAN Hardware):
+
+```bash
+# 1. Run Fixed GPS Test (10 Hz):
+python scripts/dronecan_gps_node.py fixed 5
+
+# 2. Run Live Gazebo Stream Mode:
+python scripts/dronecan_gps_node.py gazebo 10
+
+# 3. Run Parallel Telemetry & DroneCAN HUD:
+python scripts/live_flight_telemetry_hud.py
+```
+
+---
+
+## 5. Physical CAN Hardware Connection (For Future Testing)
+
+When physical CAN transceivers (e.g. CANable, Candlelight, or Matek CAN adapter) arrive:
+
+```text
+       [ Matek H743 Flight Controller ]              [ USB-CAN Transceiver / Node ]
+       ┌──────────────────────────────┐              ┌────────────────────────────┐
+       │ CAN1_TX  (PD1)               │ ───► TXD ──┐ │ CAN_H  (Pin 7)             │ ───────►
+       │ CAN1_RX  (PD0)               │ ◄─── RXD ──┤ │ CAN_L  (Pin 2)             │ ───────►
+       │ GND                          │ ───────────┤ │ 120Ω Terminating Resistor  │
+       │ +5V                          │ ───────────┤ │ GND                        │
+       └──────────────────────────────┘            └─┴────────────────────────────┘
+```
+
+### Matek H743 ArduPilot Parameters for DroneCAN GPS:
+```text
+CAN_P1_DRIVER  = 1        # Enable CAN 1 Driver
+CAN_D1_PROTOCOL = 1       # DroneCAN Protocol
+GPS_TYPE       = 9        # DroneCAN GPS
+GPS_CAN_NODEID = 42       # Override to Node ID 42 (or 0 for auto-discovery)
+```
+
+---
+
+## 6. Implementation Roadmap
+
+1. ✅ **Simulated DroneCAN GPS Node:** Built and verified with authentic DSDL bitstream serialization.
+2. ✅ **Gazebo GPS Ingestion:** Dynamic coordinate updates stream through the node without hardware.
+3. ✅ **Parallel Telemetry HUD:** Passive listener displays live flight telemetry and 29-bit CAN frames at 10 Hz.
+4. ✅ **Ethernet / SimOnHardware IMU Path:** High-rate physics path preserved for H743 lockstep control.
+5. ⏳ **Physical CAN Hardware Test:** Connect physical CAN1/CAN2 to H743 when adapter arrives.
