@@ -49,12 +49,12 @@ swarm:
 mavlink:
   drone1:
     sysid: 1
-    connection: "udpin:0.0.0.0:14550"
+    connection: "tcp:127.0.0.1:5762"
     role: leader
 
   drone2:
     sysid: 2
-    connection: "udpin:0.0.0.0:14560"
+    connection: "tcp:127.0.0.1:5772"
     role: follower
 
   # Future drones — add here
