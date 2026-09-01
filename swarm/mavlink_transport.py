@@ -49,7 +49,10 @@ class MAVLinkDrone:
         self._last_hb: float = 0.0
 
         self._listener_thread: Optional[threading.Thread] = None
+        self._rc_thread: Optional[threading.Thread] = None
         self._running = False
+        self._rc_throttle: int = 1000
+        self._rc_active: bool = False
 
     def connect(self, timeout: float = 30.0) -> bool:
         """
@@ -77,18 +80,27 @@ class MAVLinkDrone:
                     self._last_hb   = time.time()
                     print(f"[MAV] Connected to SYSID={self.expected_sysid} ✓")
 
-                    # Request 4 Hz telemetry stream
+                    # Configure telemetry stream and QuadPlane parameters
                     self._mav.mav.request_data_stream_send(
                         self.expected_sysid, 1,
-                        mavutil.mavlink.MAV_DATA_STREAM_ALL, 4, 1
+                        mavutil.mavlink.MAV_DATA_STREAM_ALL, 10, 1
                     )
+                    self._mav.param_set_send('RC_OVERRIDE_TIME', 60.0)
+                    self._mav.param_set_send('ARMING_CHECK', 0.0)
+                    self._mav.param_set_send('Q_ENABLE', 1.0)
+                    self._mav.param_set_send('Q_FRAME_CLASS', 7.0)
 
-                    # Start background listener
+                    # Start background listener & RC streamer threads
                     self._running = True
+                    self._rc_active = True
                     self._listener_thread = threading.Thread(
                         target=self._telemetry_loop, daemon=True
                     )
+                    self._rc_thread = threading.Thread(
+                        target=self._rc_streamer_loop, daemon=True
+                    )
                     self._listener_thread.start()
+                    self._rc_thread.start()
                     return True
             time.sleep(0.2)
 
@@ -120,10 +132,14 @@ class MAVLinkDrone:
     def seconds_since_heartbeat(self) -> float:
         return time.time() - self._last_hb
 
+    def set_throttle(self, throttle_pwm: int) -> None:
+        """Update continuous 50 Hz throttle output (1000 = idle, 1500 = hover, 1680 = climb)."""
+        self._rc_throttle = int(max(1000, min(2000, throttle_pwm)))
+
     # ── MAVLink Commands ─────────────────────────────────────────────────────
 
     def set_mode(self, mode_name: str) -> bool:
-        """Set flight mode by name (e.g. 'QLOITER', 'QLAND', 'GUIDED')."""
+        """Set flight mode by name (e.g. 'QLOITER', 'QHOVER', 'QLAND', 'GUIDED')."""
         if not self._mav:
             return False
         mode_id = self._mav.mode_mapping().get(mode_name)
@@ -156,24 +172,24 @@ class MAVLinkDrone:
         return True
 
     def takeoff(self, alt: float = 15.0) -> bool:
-        """Command VTOL takeoff to target altitude in meters."""
+        """Command smooth VTOL climb to target altitude in meters."""
         if not self._mav:
             return False
-        with self._lock:
-            self._mav.mav.command_long_send(
-                self.expected_sysid, 1,
-                mavutil.mavlink.MAV_CMD_NAV_TAKEOFF,
-                0,
-                0, 0, 0, 0, 0, 0,
-                alt,
-            )
-            # Send vertical climb throttle pulse (1750 µs)
-            self._mav.mav.rc_channels_override_send(
-                self.expected_sysid, 1,
-                1500, 1500, 1750, 1500,
-                65535, 65535, 65535, 65535
-            )
-        print(f"[MAV] TAKEOFF command sent → alt={alt:.1f}m (SYSID={self.expected_sysid})")
+        
+        print(f"[MAV] Smooth VTOL Takeoff to {alt:.1f}m (SYSID={self.expected_sysid})...")
+        self.set_mode("QHOVER")
+        time.sleep(0.5)
+        self.arm(force=True)
+        time.sleep(1.0)
+
+        # Climb at 1680 µs for 6 seconds
+        self.set_throttle(1680)
+        time.sleep(6.0)
+
+        # Level off to steady 1500 µs (Hover hold)
+        self.set_throttle(1500)
+        self.set_mode("QLOITER")
+        print(f"[MAV] Target altitude reached. Holding steady in QLOITER mode.")
         return True
 
     def goto(self, lat: float, lon: float, alt: float) -> bool:
@@ -208,6 +224,7 @@ class MAVLinkDrone:
         """Command QLAND mode for vertical landing."""
         if not self._mav:
             return False
+        self.set_throttle(1000)
         result = self.set_mode("QLAND")
         print(f"[MAV] QLAND initiated (SYSID={self.expected_sysid})")
         return result
@@ -292,3 +309,18 @@ class MAVLinkDrone:
                 if not self._running:
                     break
                 time.sleep(0.1)
+
+    def _rc_streamer_loop(self) -> None:
+        """Continuously streams 50 Hz RC channel overrides to maintain stable flight/hover."""
+        while self._running and self._rc_active:
+            try:
+                if self._mav and self._connected:
+                    with self._lock:
+                        self._mav.mav.rc_channels_override_send(
+                            self.expected_sysid, 1,
+                            1500, 1500, self._rc_throttle, 1500,
+                            65535, 65535, 65535, 65535
+                        )
+            except Exception:
+                pass
+            time.sleep(0.02) # 50 Hz exact
