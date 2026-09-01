@@ -39,6 +39,12 @@ echo ""
 
 cd "${ARDUPILOT_DIR}"
 
+# Windows host IP for Mission Planner connection (Drone 2 uses port 14560)
+WINDOWS_HOST=$(ip route show default | awk '/default/ {print $3}' | head -1)
+
+echo ">>> Connect Mission Planner (2nd window) → UDP ${WINDOWS_HOST}:14560"
+echo ""
+
 python3 Tools/autotest/sim_vehicle.py \
     -v ArduPlane \
     -f JSON \
@@ -48,4 +54,6 @@ python3 Tools/autotest/sim_vehicle.py \
     --add-param-file="${PARAM_FILE}" \
     --no-mavproxy \
     --no-rebuild \
-    --sysid 2
+    --sysid 2 \
+    --out=udpout:${WINDOWS_HOST}:14560 \
+    --out=udpout:127.0.0.1:14560
