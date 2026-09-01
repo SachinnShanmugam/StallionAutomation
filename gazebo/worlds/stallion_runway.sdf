@@ -89,19 +89,16 @@
       </link>
     </model>
 
-    <!-- Spawn Stallion VTOL — 0.15m above ground for belly clearance -->
+    <!-- Spawn Stallion VTOL Drone 1 (SYSID=1) — Left side of runway (Y = -2.5m) -->
     <include>
       <uri>model://stallion_vtol</uri>
-      <name>stallion_vtol_1</name>
-      <pose>0 0 0.08 0 0 0</pose>
+      <pose>0 -2.5 0.08 0 0 0</pose>
     </include>
 
-    <!-- Spawn Stallion VTOL Drone 2 — 10m east (Y+10 in Gazebo ENU) -->
-    <!-- FDM port 9012 connects to SITL --instance 1 (Drone 2, SYSID=2) -->
+    <!-- Spawn Stallion VTOL Drone 2 (SYSID=2) — Right side of runway (Y = +2.5m) -->
     <include>
       <uri>model://stallion_vtol_2</uri>
-      <name>stallion_vtol_2</name>
-      <pose>0 10 0.08 0 0 0</pose>
+      <pose>0 2.5 0.08 0 0 0</pose>
     </include>
 
   </world>

@@ -22,10 +22,9 @@ if [ ! -f "${PARAM_FILE}" ]; then
     exit 1
 fi
 
-# Offset home position by ~10 metres east so Drone 2 starts beside Drone 1
-# Chennai base: 13.0827, 80.2707  →  +0.0001° lon ≈ +10m
+# Offset home position by ~2.5 metres east so Drone 2 starts beside Drone 1
 HOME_LAT=13.0827
-HOME_LON=80.2708    # 10m east of Drone 1
+HOME_LON=80.27072    # 2.5m east of runway center line
 
 echo ""
 echo "============================================="
