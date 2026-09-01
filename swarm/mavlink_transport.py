@@ -177,18 +177,19 @@ class MAVLinkDrone:
             return False
         
         print(f"[MAV] Smooth VTOL Takeoff to {alt:.1f}m (SYSID={self.expected_sysid})...")
-        self.set_mode("QHOVER")
+        self._mav.param_set_send('Q_GUIDED_MODE', 1.0)
+        self._mav.param_set_send('Q_OPTIONS', 1.0)
+        self.set_mode("QLOITER")
         time.sleep(0.5)
         self.arm(force=True)
         time.sleep(1.0)
 
-        # Climb at 1680 µs for 6 seconds
-        self.set_throttle(1680)
-        time.sleep(6.0)
+        # Climb at 1750 µs for 8 seconds to reach ~15m
+        self.set_throttle(1750)
+        time.sleep(8.0)
 
         # Level off to steady 1500 µs (Hover hold)
         self.set_throttle(1500)
-        self.set_mode("QLOITER")
         print(f"[MAV] Target altitude reached. Holding steady in QLOITER mode.")
         return True
 
