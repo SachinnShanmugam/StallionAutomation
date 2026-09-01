@@ -51,8 +51,8 @@ python3 Tools/autotest/sim_vehicle.py \
     -I 1 \
     --custom-location="${HOME_LAT},${HOME_LON},10,90" \
     --add-param-file="${PARAM_FILE}" \
-    --no-mavproxy \
-    --no-rebuild \
     --sysid 2 \
     --out=udpout:${WINDOWS_HOST}:14560 \
-    --out=udpout:127.0.0.1:14560
+    --out=udpout:127.0.0.1:14560 \
+    --console \
+    --map
