@@ -1,0 +1,64 @@
+# ============================================================
+# Stallion Swarm V1 — Simulated LoRa Transport Configuration
+# ============================================================
+#
+# These values emulate a generic LoRa-class radio channel.
+# They do NOT represent any specific radio hardware product.
+# Adjust freely to stress-test the swarm protocol.
+#
+# To change at runtime, edit this file and restart leader/follower.
+# The lora_transport hot-reload command is: > set loss 20
+# ============================================================
+
+lora:
+  # One-way base delivery delay (milliseconds)
+  latency_ms: 100
+
+  # Random ±jitter added to each packet (milliseconds)
+  jitter_ms: 20
+
+  # Probability a packet is silently dropped (0–100)
+  packet_loss_percent: 2
+
+  # Simulated channel throughput cap (bits per second)
+  bandwidth_bps: 10000
+
+  # UDP port base. Node port = base + sysid
+  # Leader (sysid=1) listens on base+1=10001, sends to base+2=10002
+  # Follower (sysid=2) listens on base+2=10002, sends to base+1=10001
+  # Drone 3 would use base+3=10003, etc.
+  udp_port_base: 10000
+  udp_host: "127.0.0.1"
+
+swarm:
+  # Node IDs that are authorized to send tasks
+  authorized_leaders: [1]
+
+  # Maximum age of a task before follower rejects it (seconds)
+  task_expiry_seconds: 120
+
+  # Seconds follower waits for ACK confirmation before retrying
+  ack_timeout_seconds: 10
+
+  # Heartbeat broadcast interval (seconds)
+  heartbeat_interval_seconds: 2.0
+
+  # If communication is lost after task accepted, hold for this long then abort
+  comms_lost_hold_seconds: 30
+
+mavlink:
+  drone1:
+    sysid: 1
+    connection: "tcp:127.0.0.1:5760"
+    role: leader
+
+  drone2:
+    sysid: 2
+    connection: "tcp:127.0.0.1:5770"
+    role: follower
+
+  # Future drones — add here
+  # drone3:
+  #   sysid: 3
+  #   connection: "tcp:127.0.0.1:5780"
+  #   role: follower

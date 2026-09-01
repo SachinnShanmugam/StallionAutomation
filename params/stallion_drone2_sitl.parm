@@ -1,0 +1,168 @@
+# ============================================================
+# Flightory Stallion VTOL — Drone 2 SITL Parameter File
+# SYSID_THISMAV = 2  (Follower in Swarm V1)
+# Tilt-Tricopter: 2 Front Tilt + 1 Rear Fixed with Yaw Servo
+# ============================================================
+# Based on stallion_vtol_sitl.parm with SYSID override for Drone 2
+
+# ==========================================
+# SWARM IDENTITY — DRONE 2
+# ==========================================
+SYSID_THISMAV       2
+
+# ==========================================
+# 1. QUADPLANE CORE
+# ==========================================
+Q_ENABLE            1
+Q_FRAME_CLASS       7
+Q_FRAME_TYPE        0
+Q_TAILSIT_ENABLE    0
+
+# ==========================================
+# 2. TILT-ROTOR CONFIGURATION
+# ==========================================
+Q_TILT_ENABLE       1
+Q_TILT_TYPE         0
+Q_TILT_MASK         3
+Q_TILT_MAX          90
+Q_TILT_RATE_UP      40
+Q_TILT_RATE_DN      40
+Q_TILT_YAW_ANGLE    0
+Q_ASSIST_SPEED      -1
+
+# ==========================================
+# 3. MOTOR PWM TYPE — Normal PWM for SITL/Gazebo
+# ==========================================
+Q_M_PWM_TYPE        0
+
+# ==========================================
+# 4. MOTOR SPIN THRESHOLDS
+# ==========================================
+Q_M_SPIN_ARM        0.10
+Q_M_SPIN_MIN        0.15
+Q_M_HOVER_LEARN     2
+
+# ==========================================
+# 5. BATTERY VOLTAGE COMPENSATION
+# ==========================================
+Q_M_BAT_VOLT_MAX    16.8
+Q_M_BAT_VOLT_MIN    13.2
+
+# ==========================================
+# 6. QUADPLANE OPTIONS
+# ==========================================
+Q_OPTIONS           0
+
+# ==========================================
+# 7. AIRSPEED & TRANSITION
+# ==========================================
+ARSPD_ENABLE        0
+ARSPD_USE           0
+ARSPD_FBW_MIN       12
+ARSPD_FBW_MAX       25
+Q_TRANSITION_MS     5000
+Q_LAND_SPEED        50
+Q_TAKEOFF_ALT       10
+Q_VELZ_MAX          150
+
+# AUTO mode vertical speed limits
+Q_WP_SPD            1.5
+Q_WP_SPD_UP         0.8
+Q_WP_SPD_DN         0.8
+Q_WP_ACC            0.5
+Q_WP_ACC_Z          0.5
+Q_WP_RADIUS_M       3.0
+
+# ==========================================
+# 8. SERVO / MOTOR MAPPING
+# ==========================================
+SERVO1_FUNCTION     33
+SERVO2_FUNCTION     34
+SERVO3_FUNCTION     36
+SERVO4_FUNCTION     41
+SERVO5_FUNCTION     39
+SERVO6_FUNCTION     4
+SERVO7_FUNCTION     19
+SERVO8_FUNCTION     21
+
+SERVO4_MIN          1000
+SERVO4_MAX          2000
+SERVO4_TRIM         1000
+
+SERVO5_MIN          1000
+SERVO5_MAX          2000
+SERVO5_TRIM         1500
+SERVO5_REVERSED     0
+
+# Baseline Hover Throttle
+Q_M_THST_HOVER      0.42
+
+# ==========================================
+# 9. HOVER PID TUNING
+# ==========================================
+Q_A_ANG_RLL_P       6.0
+Q_A_ANG_PIT_P       6.0
+Q_A_ANG_YAW_P       2.5
+
+Q_A_RAT_RLL_P       0.25
+Q_A_RAT_RLL_I       0.25
+Q_A_RAT_RLL_D       0.004
+Q_A_RAT_RLL_FLTD    10.0
+
+Q_A_RAT_PIT_P       0.25
+Q_A_RAT_PIT_I       0.25
+Q_A_RAT_PIT_D       0.004
+Q_A_RAT_PIT_FLTD    10.0
+
+Q_A_RAT_YAW_P       0.18
+Q_A_RAT_YAW_I       0.05
+Q_A_RAT_YAW_D       0.002
+Q_A_RAT_YAW_FLTD    10.0
+
+Q_LOIT_ANG_MAX      15
+Q_LOIT_SPEED_MS     5.0
+Q_LOIT_ACC_MAX_M    2.5
+
+Q_A_ANGLE_MAX       15.0
+Q_A_RATE_WPY_MAX    20.0
+Q_A_RATE_Y_MAX      25.0
+Q_A_ACC_Y_MAX       35.0
+Q_M_YAW_SV_ANGLE    15.0
+
+# ==========================================
+# 10. NAVIGATION
+# ==========================================
+WP_RADIUS           15.0
+WP_LOITER_RAD       80
+RTL_RADIUS          80
+
+# ==========================================
+# 11. SITL OVERRIDES
+# ==========================================
+ARMING_CHECK        0
+
+INS_USE1            1
+INS_USE2            0
+INS_USE3            0
+INS_ENABLE2         0
+INS_ENABLE3         0
+AHRS_ORIENTATION    0
+
+COMPASS_ENABLE      1
+COMPASS_USE         1
+COMPASS_USE2        0
+COMPASS_USE3        0
+SIM_COMPASS_ENA     1
+
+SIM_BATT_VOLTAGE    16.8
+BAT_MONITOR         0
+
+Q_RTL_MODE          3
+SCHED_LOOP_RATE     400
+
+EK3_ENABLE          1
+EK2_ENABLE          0
+AHRS_EKF_TYPE       3
+
+FENCE_ENABLE        0
+INS_GYRO_FILTER     20
