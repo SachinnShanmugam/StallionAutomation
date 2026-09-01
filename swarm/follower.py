@@ -37,7 +37,7 @@ from swarm.config import get_config
 from swarm.lora_transport import SimulatedLoRaTransport
 from swarm.mavlink_transport import MAVLinkDrone
 from swarm.messages import (
-    MessageType, AckStatus, TaskMessage,
+    MessageType, AckStatus, TaskMessage, LeaderState,
     make_task_ack, make_task_complete,
 )
 from swarm.swarm_node import SwarmNode
@@ -53,8 +53,8 @@ class FollowerNode(SwarmNode):
     Follower drone node (SYSID=2).
 
     Handles:
-        - Passive listening over LoRa transport
-        - Task validation, ACK, navigation, landing, TASK_COMPLETE
+        - Autonomous formation tracking (maintains 20m behind Leader over LoRa)
+        - Passive listening for task messages
     """
 
     def __init__(self):
@@ -75,6 +75,7 @@ class FollowerNode(SwarmNode):
         super().__init__(FOLLOWER_SYSID, transport, drone)
         self.validator     = TaskValidator(FOLLOWER_SYSID, cfg.swarm)
         self._exec_thread: threading.Thread | None = None
+        self._last_tracking_log = 0.0
 
     def start_and_connect(self, timeout: float = 30.0) -> bool:
         """Connect MAVLink and start background threads."""
@@ -87,8 +88,8 @@ class FollowerNode(SwarmNode):
         print(f"[FOLLOWER] Connected SYSID={FOLLOWER_SYSID} ✓")
         super().start()
 
-        print("\n[FOLLOWER] Listening for swarm messages...")
-        print("[FOLLOWER] Waiting for TASK from Leader (SYSID=1)...\n")
+        print("\n[FOLLOWER] Listening for swarm telemetry over LoRa...")
+        print("[FOLLOWER] Ready to autonomously follow Leader (SYSID=1) at 20m formation distance!\n")
         return True
 
     # ── Incoming message handler ─────────────────────────────────────────────
@@ -96,7 +97,10 @@ class FollowerNode(SwarmNode):
     def on_message(self, msg) -> None:
         mtype = msg.message_type
 
-        if mtype == MessageType.TASK:
+        if mtype == MessageType.LEADER_STATE:
+            self._handle_leader_state(msg)
+
+        elif mtype == MessageType.TASK:
             self._handle_task(msg)
 
         elif mtype == MessageType.LAND:
@@ -107,9 +111,61 @@ class FollowerNode(SwarmNode):
             print(f"\n[FOLLOWER] ABORT command received — switching to QLOITER HOLD")
             self.drone.set_mode("QLOITER")
 
-        else:
-            print(f"\n[FOLLOWER] Received message type={mtype.value} "
-                  f"from SYSID={msg.sender_id}")
+    # ── Formation Tracking ───────────────────────────────────────────────────
+
+    def _handle_leader_state(self, msg) -> None:
+        try:
+            state = LeaderState.from_dict(msg.payload)
+        except Exception:
+            return
+
+        import math
+        leader_lat = state.latitude
+        leader_lon = state.longitude
+        leader_alt = state.altitude
+        heading    = state.heading
+
+        # Formation offset: 20 meters behind Leader along heading vector
+        offset_dist = 20.0
+        rad_heading = math.radians(heading)
+        d_north = -offset_dist * math.cos(rad_heading)
+        d_east  = -offset_dist * math.sin(rad_heading)
+
+        # Convert metric offsets to GPS coordinates
+        target_lat = leader_lat + (d_north / 111139.0)
+        target_lon = leader_lon + (d_east / (111139.0 * math.cos(math.radians(leader_lat))))
+        target_alt = max(10.0, leader_alt)
+
+        # Compute actual distance between Follower and Leader
+        my_lat, my_lon, my_alt = self.drone.position
+        d_lat_m = (my_lat - leader_lat) * 111139.0
+        d_lon_m = (my_lon - leader_lon) * 111139.0 * math.cos(math.radians(leader_lat))
+        actual_dist = math.hypot(d_lat_m, d_lon_m)
+
+        # Auto-launch Follower if Leader is airborne and Follower is on ground
+        if (leader_alt > 2.0 or state.flight_mode in ("QLOITER", "QHOVER", "AUTO", "GUIDED")) and not self.drone.armed:
+            print("\n[FOLLOWER] Leader is airborne! Auto-launching Drone 2 into formation...")
+            self.drone.set_mode("QLOITER")
+            self.drone.arm(force=True)
+            self.drone.set_throttle(1750)
+
+        # If airborne, track formation waypoint
+        if self.drone.armed:
+            if my_alt < target_alt - 1.0:
+                self.drone.set_throttle(1680)
+            elif my_alt > target_alt + 1.0:
+                self.drone.set_throttle(1400)
+            else:
+                self.drone.set_throttle(1500)
+            self.drone.track_target(target_lat, target_lon, target_alt, yaw=heading)
+
+        now = time.time()
+        if now - self._last_tracking_log >= 2.0 and (leader_alt > 1.0 or self.drone.armed):
+            print(f"\n[FOLLOWER]")
+            print(f"Leader detected: {leader_lat:.6f}, {leader_lon:.6f} | Alt: {leader_alt:.1f}m | Heading: {heading:05.1f}°")
+            print(f"Distance to Leader: {actual_dist:.1f}m (Desired: 20.0m behind)")
+            print(f"Tracking Target   : {target_lat:.6f}, {target_lon:.6f} @ {target_alt:.1f}m | Tracking: OK")
+            self._last_tracking_log = now
 
     # ── Task handling ────────────────────────────────────────────────────────
 

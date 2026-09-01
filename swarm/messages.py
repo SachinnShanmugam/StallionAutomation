@@ -24,13 +24,14 @@ from typing import Any, Dict, Optional
 
 class MessageType(str, Enum):
     HEARTBEAT    = "HEARTBEAT"
-    POSITION     = "POSITION"       # future
-    STATUS       = "STATUS"         # future
+    LEADER_STATE = "LEADER_STATE"   # Real-time Leader telemetry stream
+    POSITION     = "POSITION"
+    STATUS       = "STATUS"
     TASK         = "TASK"
     TASK_ACK     = "TASK_ACK"
     TASK_COMPLETE = "TASK_COMPLETE"
-    ABORT        = "ABORT"          # future
-    RETURN_HOME  = "RETURN_HOME"    # future
+    ABORT        = "ABORT"
+    RETURN_HOME  = "RETURN_HOME"
     LAND         = "LAND"
 
 
@@ -113,6 +114,64 @@ def make_heartbeat(sender_id: int) -> SwarmMessage:
         message_type=MessageType.HEARTBEAT,
         priority=Priority.LOW,
         payload={"ts": time.time()},
+    )
+
+
+# ─── LEADER STATE (Formation Swarm Telemetry) ──────────────────────────────
+
+@dataclass
+class LeaderState:
+    """
+    Real-time Leader telemetry payload for autonomous formation following.
+    Carries GPS, Altitude, Velocity Vector, Heading, and Flight Mode.
+    """
+    latitude:    float
+    longitude:   float
+    altitude:    float
+    vx:          float = 0.0
+    vy:          float = 0.0
+    vz:          float = 0.0
+    heading:     float = 0.0
+    flight_mode: str = "UNKNOWN"
+    timestamp:   float = field(default_factory=time.time)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @staticmethod
+    def from_dict(d: Dict[str, Any]) -> "LeaderState":
+        return LeaderState(**d)
+
+
+def make_leader_state(
+    sender_id: int,
+    latitude: float,
+    longitude: float,
+    altitude: float,
+    vx: float = 0.0,
+    vy: float = 0.0,
+    vz: float = 0.0,
+    heading: float = 0.0,
+    flight_mode: str = "QLOITER",
+) -> SwarmMessage:
+    """Broadcast Leader's real-time flight state over LoRa to all followers."""
+    state = LeaderState(
+        latitude=latitude,
+        longitude=longitude,
+        altitude=altitude,
+        vx=vx,
+        vy=vy,
+        vz=vz,
+        heading=heading,
+        flight_mode=flight_mode,
+        timestamp=time.time(),
+    )
+    return SwarmMessage.new(
+        sender_id=sender_id,
+        receiver_id=0,  # broadcast
+        message_type=MessageType.LEADER_STATE,
+        priority=Priority.MEDIUM,
+        payload=state.to_dict(),
     )
 
 

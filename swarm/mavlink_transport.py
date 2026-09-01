@@ -43,6 +43,10 @@ class MAVLinkDrone:
         self._lat: float  = 0.0
         self._lon: float  = 0.0
         self._alt: float  = 0.0
+        self._vx: float   = 0.0
+        self._vy: float   = 0.0
+        self._vz: float   = 0.0
+        self._heading: float = 0.0
         self._mode: str   = "UNKNOWN"
         self._armed: bool = False
         self._connected   = False
@@ -122,6 +126,16 @@ class MAVLinkDrone:
         return (self._lat, self._lon, self._alt)
 
     @property
+    def heading(self) -> float:
+        """Returns heading in degrees (0-360)."""
+        return self._heading
+
+    @property
+    def velocity(self) -> Tuple[float, float, float]:
+        """Returns (vx, vy, vz) in m/s."""
+        return (self._vx, self._vy, self._vz)
+
+    @property
     def mode(self) -> str:
         return self._mode
 
@@ -135,6 +149,30 @@ class MAVLinkDrone:
     def set_throttle(self, throttle_pwm: int) -> None:
         """Update continuous 50 Hz throttle output (1000 = idle, 1500 = hover, 1680 = climb)."""
         self._rc_throttle = int(max(1000, min(2000, throttle_pwm)))
+
+    def track_target(self, lat: float, lon: float, alt: float, yaw: float = 0.0) -> bool:
+        """
+        Stream target position coordinate to ArduPilot in VTOL GUIDED/QLOITER mode.
+        """
+        if not self._mav:
+            return False
+        import math
+        with self._lock:
+            # Type mask: use position + yaw (ignore velocities and accelerations)
+            type_mask = 0b0000101111111000
+            self._mav.mav.set_position_target_global_int_send(
+                0,
+                self.expected_sysid, 1,
+                mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,
+                type_mask,
+                int(lat * 1e7),
+                int(lon * 1e7),
+                float(alt),
+                0, 0, 0,
+                0, 0, 0,
+                math.radians(yaw), 0
+            )
+        return True
 
     # ── MAVLink Commands ─────────────────────────────────────────────────────
 
@@ -279,20 +317,21 @@ class MAVLinkDrone:
     # ── Background telemetry listener ────────────────────────────────────────
 
     def _telemetry_loop(self) -> None:
+        import math
         while self._running:
             try:
                 msg = self._mav.recv_match(
-                    type=["HEARTBEAT", "GLOBAL_POSITION_INT", "HEARTBEAT"],
-                    blocking=True, timeout=1.0
+                    type=["HEARTBEAT", "GLOBAL_POSITION_INT", "ATTITUDE", "VFR_HUD"],
+                    blocking=True, timeout=0.5
                 )
                 if not msg:
                     continue
 
-                mtype = msg.get_type()
-                src   = msg.get_srcSystem()
-
+                src = msg.get_srcSystem()
                 if src != self.expected_sysid:
                     continue
+
+                mtype = msg.get_type()
 
                 if mtype == "HEARTBEAT":
                     self._last_hb = time.time()
@@ -305,11 +344,24 @@ class MAVLinkDrone:
                     self._lat = msg.lat / 1e7
                     self._lon = msg.lon / 1e7
                     self._alt = msg.relative_alt / 1000.0
+                    self._vx  = msg.vx / 100.0
+                    self._vy  = msg.vy / 100.0
+                    self._vz  = msg.vz / 100.0
+                    if hasattr(msg, 'hdg') and msg.hdg != 65535:
+                        self._heading = msg.hdg / 100.0
+
+                elif mtype == "ATTITUDE":
+                    if hasattr(msg, 'yaw'):
+                        self._heading = (math.degrees(msg.yaw) + 360.0) % 360.0
+
+                elif mtype == "VFR_HUD":
+                    if hasattr(msg, 'heading'):
+                        self._heading = float(msg.heading)
 
             except Exception:
                 if not self._running:
                     break
-                time.sleep(0.1)
+                time.sleep(0.05)
 
     def _rc_streamer_loop(self) -> None:
         """Continuously streams 50 Hz RC channel overrides to maintain stable flight/hover."""

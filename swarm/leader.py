@@ -38,7 +38,7 @@ from swarm.lora_transport import SimulatedLoRaTransport
 from swarm.mavlink_transport import MAVLinkDrone
 from swarm.messages import (
     MessageType, Priority, TaskAction,
-    make_task_ack,
+    make_task_ack, make_leader_state,
 )
 from swarm.swarm_node import SwarmNode
 from swarm.task_manager import TaskManager
@@ -75,6 +75,7 @@ class LeaderNode(SwarmNode):
 
         super().__init__(LEADER_SYSID, transport, drone)
         self.task_mgr = TaskManager(LEADER_SYSID, cfg.swarm)
+        self._tx_state_thread: Optional[threading.Thread] = None
 
     def start_and_connect(self, timeout: float = 30.0) -> bool:
         """Connect MAVLink and start background threads."""
@@ -86,7 +87,47 @@ class LeaderNode(SwarmNode):
 
         print(f"[LEADER] Connected SYSID={LEADER_SYSID} ✓")
         super().start()
+
+        # Start 2 Hz Leader telemetry broadcast loop
+        self._tx_state_thread = threading.Thread(
+            target=self._telemetry_broadcast_loop, daemon=True, name="leader-telem"
+        )
+        self._tx_state_thread.start()
         return True
+
+    def _telemetry_broadcast_loop(self) -> None:
+        """Periodically broadcast real-time Leader state (2 Hz) over simulated LoRa."""
+        last_log = 0.0
+        while self._running:
+            try:
+                if self.drone.is_connected:
+                    lat, lon, alt = self.drone.position
+                    vx, vy, vz = self.drone.velocity
+                    heading = self.drone.heading
+                    mode = self.drone.mode
+
+                    msg = make_leader_state(
+                        sender_id=LEADER_SYSID,
+                        latitude=lat,
+                        longitude=lon,
+                        altitude=alt,
+                        vx=vx,
+                        vy=vy,
+                        vz=vz,
+                        heading=heading,
+                        flight_mode=mode,
+                    )
+                    self.transport.send(msg)
+
+                    now = time.time()
+                    if now - last_log >= 2.0:
+                        if alt > 1.0 or self.drone.armed:
+                            print(f"\n[LEADER] Position: {lat:.6f}, {lon:.6f} | Alt: {alt:.1f}m | Hdg: {heading:05.1f}° | Mode: {mode}")
+                            print(f"[LORA TX] Leader → Follower (Position + Velocity + Heading)")
+                        last_log = now
+            except Exception:
+                pass
+            time.sleep(0.5)
 
     # ── Incoming message handler ─────────────────────────────────────────────
 
