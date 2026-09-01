@@ -43,7 +43,7 @@ class SwarmConfig:
 @dataclass
 class MAVLinkDroneConfig:
     sysid: int = 1
-    connection: str = "tcp:127.0.0.1:5760"
+    connection: str = "udpin:0.0.0.0:14550"
     role: str = "follower"
 
 
@@ -82,7 +82,7 @@ def load_config() -> Config:
     for name, d in mav_raw.items():
         mavlink[name] = MAVLinkDroneConfig(
             sysid=int(d.get("sysid", 1)),
-            connection=str(d.get("connection", "tcp:127.0.0.1:5760")),
+            connection=str(d.get("connection", "udpin:0.0.0.0:14550")),
             role=str(d.get("role", "follower")),
         )
 
