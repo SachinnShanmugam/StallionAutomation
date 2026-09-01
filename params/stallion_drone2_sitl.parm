@@ -51,6 +51,7 @@ Q_M_BAT_VOLT_MIN    13.2
 # 6. QUADPLANE OPTIONS
 # ==========================================
 Q_OPTIONS           0
+Q_GUIDED_MODE       1
 
 # ==========================================
 # 7. AIRSPEED & TRANSITION

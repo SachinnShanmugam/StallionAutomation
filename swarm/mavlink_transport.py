@@ -155,14 +155,13 @@ class MAVLinkDrone:
 
     def track_target(self, lat: float, lon: float, alt: float, yaw: float = 0.0) -> bool:
         """
-        Stream target position coordinate to ArduPilot in VTOL GUIDED/QLOITER mode.
+        Stream target position coordinate to ArduPilot in VTOL GUIDED mode.
         """
         if not self._mav:
             return False
-        import math
         with self._lock:
-            # Type mask: use position + yaw (ignore velocities and accelerations)
-            type_mask = 0b0000101111111000
+            # Type mask: 0b0000111111111000 (0x0FF8) -> position (x, y, z) enabled, ignore vel, acc, yaw
+            type_mask = 0b0000111111111000
             self._mav.mav.set_position_target_global_int_send(
                 0,
                 self.expected_sysid, 1,
@@ -173,7 +172,7 @@ class MAVLinkDrone:
                 float(alt),
                 0, 0, 0,
                 0, 0, 0,
-                math.radians(yaw), 0
+                0, 0
             )
         return True
 

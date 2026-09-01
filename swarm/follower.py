@@ -76,6 +76,9 @@ class FollowerNode(SwarmNode):
         self.validator     = TaskValidator(FOLLOWER_SYSID, cfg.swarm)
         self._exec_thread: threading.Thread | None = None
         self._last_tracking_log = 0.0
+        self._is_launching = False
+        self._filt_target_lat: Optional[float] = None
+        self._filt_target_lon: Optional[float] = None
 
     def start_and_connect(self, timeout: float = 30.0) -> bool:
         """Connect MAVLink and start background threads."""
@@ -113,6 +116,33 @@ class FollowerNode(SwarmNode):
 
     # ── Formation Tracking ───────────────────────────────────────────────────
 
+    def _launch_drone2(self) -> None:
+        """Asynchronously launch Drone 2 in QLOITER to ~8m, then hand off to GUIDED mode."""
+        self._is_launching = True
+        print(f"\n[FOLLOWER] 🚀 Auto-launching Drone 2 into formation...")
+
+        # 1. Mode QLOITER + Arm
+        self.drone.set_mode("QLOITER")
+        time.sleep(0.5)
+        self.drone.arm(force=True)
+        time.sleep(0.5)
+
+        # 2. Smooth climb to 8m (RC3 = 1750 for 3.5s)
+        self.drone.set_throttle(1750)
+        time.sleep(3.5)
+
+        # 3. Hold hover
+        self.drone.set_throttle(1500)
+        time.sleep(1.0)
+
+        # 4. Switch to GUIDED mode for autonomous 3D waypoint navigation
+        self.drone.set_mode("GUIDED")
+
+        # 5. Disable RC channel overrides completely so GUIDED autopilot has full authority
+        self.drone.set_throttle(1000)
+        self._is_launching = False
+        print(f"[FOLLOWER] ✓ Formation altitude reached. GUIDED tracking ACTIVE!\n")
+
     def _handle_leader_state(self, msg) -> None:
         try:
             state = LeaderState.from_dict(msg.payload)
@@ -134,7 +164,7 @@ class FollowerNode(SwarmNode):
         # Convert metric offsets to GPS coordinates
         target_lat = leader_lat + (d_north / 111139.0)
         target_lon = leader_lon + (d_east / (111139.0 * math.cos(math.radians(leader_lat))))
-        target_alt = max(10.0, leader_alt)
+        target_alt = max(8.0, leader_alt)
 
         # Compute actual distance between Follower and Leader
         my_lat, my_lon, my_alt = self.drone.position
@@ -142,27 +172,26 @@ class FollowerNode(SwarmNode):
         d_lon_m = (my_lon - leader_lon) * 111139.0 * math.cos(math.radians(leader_lat))
         actual_dist = math.hypot(d_lat_m, d_lon_m)
 
-        # Only launch Follower if Leader is ACTUALLY in the air (alt > 2.5m)
-        if leader_alt > 2.5 and not self.drone.armed:
-            print(f"\n[FOLLOWER] Leader is airborne (Alt = {leader_alt:.1f}m)! Launching Drone 2 into formation...")
-            self.drone.set_mode("QLOITER")
-            self.drone.arm(force=True)
-            self.drone.set_throttle(1750)
+        # Auto-launch Follower if Leader is ACTUALLY in the air (alt > 2.5m)
+        if leader_alt > 2.5 and not self.drone.armed and not self._is_launching:
+            threading.Thread(target=self._launch_drone2, daemon=True).start()
 
         # If Leader lands (alt < 1.0m) and Follower is still in the air, Follower lands too
-        elif leader_alt < 1.0 and self.drone.armed and my_alt > 2.0:
+        elif leader_alt < 1.0 and self.drone.armed and my_alt > 2.0 and not self._is_launching:
             print("\n[FOLLOWER] Leader has landed. Follower initiating landing...")
             self.drone.land()
 
-        # If airborne, track formation waypoint
-        if self.drone.armed and leader_alt > 2.0:
-            if my_alt < target_alt - 1.0:
-                self.drone.set_throttle(1680)
-            elif my_alt > target_alt + 1.0:
-                self.drone.set_throttle(1400)
+        # If airborne, track formation waypoint in GUIDED mode
+        if self.drone.armed and not self._is_launching and leader_alt > 2.0:
+            if self._filt_target_lat is None:
+                self._filt_target_lat = target_lat
+                self._filt_target_lon = target_lon
             else:
-                self.drone.set_throttle(1500)
-            self.drone.track_target(target_lat, target_lon, target_alt, yaw=heading)
+                alpha = 0.4
+                self._filt_target_lat = alpha * target_lat + (1.0 - alpha) * self._filt_target_lat
+                self._filt_target_lon = alpha * target_lon + (1.0 - alpha) * self._filt_target_lon
+
+            self.drone.track_target(self._filt_target_lat, self._filt_target_lon, target_alt)
 
         now = time.time()
         if now - self._last_tracking_log >= 2.0:
