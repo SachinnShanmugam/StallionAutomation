@@ -33,9 +33,10 @@ class MAVLinkDrone:
         drone.land()
     """
 
-    def __init__(self, connection_string: str, expected_sysid: int):
+    def __init__(self, connection_string: str, expected_sysid: int, is_controlled: bool = False):
         self.connection_string = connection_string
         self.expected_sysid    = expected_sysid
+        self.is_controlled     = is_controlled
         self._mav: Optional[mavutil.mavlink_connection] = None
         self._lock = threading.Lock()
 
@@ -84,27 +85,29 @@ class MAVLinkDrone:
                     self._last_hb   = time.time()
                     print(f"[MAV] Connected to SYSID={self.expected_sysid} ✓")
 
-                    # Configure telemetry stream and QuadPlane parameters
+                    # Configure telemetry stream
                     self._mav.mav.request_data_stream_send(
                         self.expected_sysid, 1,
                         mavutil.mavlink.MAV_DATA_STREAM_ALL, 10, 1
                     )
-                    self._mav.param_set_send('RC_OVERRIDE_TIME', 60.0)
-                    self._mav.param_set_send('ARMING_CHECK', 0.0)
-                    self._mav.param_set_send('Q_ENABLE', 1.0)
-                    self._mav.param_set_send('Q_FRAME_CLASS', 7.0)
 
-                    # Start background listener & RC streamer threads
+                    # Start background listener thread
                     self._running = True
-                    self._rc_active = True
                     self._listener_thread = threading.Thread(
                         target=self._telemetry_loop, daemon=True
                     )
-                    self._rc_thread = threading.Thread(
-                        target=self._rc_streamer_loop, daemon=True
-                    )
                     self._listener_thread.start()
-                    self._rc_thread.start()
+
+                    # Only start RC streamer if this node is an actively controlled Follower
+                    if self.is_controlled:
+                        self._mav.param_set_send('RC_OVERRIDE_TIME', 60.0)
+                        self._mav.param_set_send('ARMING_CHECK', 0.0)
+                        self._rc_active = True
+                        self._rc_thread = threading.Thread(
+                            target=self._rc_streamer_loop, daemon=True
+                        )
+                        self._rc_thread.start()
+
                     return True
             time.sleep(0.2)
 
@@ -367,7 +370,7 @@ class MAVLinkDrone:
         """Continuously streams 50 Hz RC channel overrides to maintain stable flight/hover."""
         while self._running and self._rc_active:
             try:
-                if self._mav and self._connected:
+                if self.is_controlled and self._mav and self._connected and self._armed and self._rc_throttle > 1000:
                     with self._lock:
                         self._mav.mav.rc_channels_override_send(
                             self.expected_sysid, 1,

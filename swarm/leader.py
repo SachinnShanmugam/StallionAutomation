@@ -64,7 +64,7 @@ class LeaderNode(SwarmNode):
         # MAVLink connection to Drone 1
         mav_cfg = cfg.mavlink.get("drone1")
         conn    = mav_cfg.connection if mav_cfg else "tcp:127.0.0.1:5762"
-        drone   = MAVLinkDrone(conn, expected_sysid=LEADER_SYSID)
+        drone   = MAVLinkDrone(conn, expected_sysid=LEADER_SYSID, is_controlled=False)
 
         # Simulated LoRa transport (Leader sends to Follower's port)
         transport = SimulatedLoRaTransport(

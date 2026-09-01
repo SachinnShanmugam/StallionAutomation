@@ -63,7 +63,7 @@ class FollowerNode(SwarmNode):
         # MAVLink connection to Drone 2
         mav_cfg = cfg.mavlink.get("drone2")
         conn    = mav_cfg.connection if mav_cfg else "tcp:127.0.0.1:5772"
-        drone   = MAVLinkDrone(conn, expected_sysid=FOLLOWER_SYSID)
+        drone   = MAVLinkDrone(conn, expected_sysid=FOLLOWER_SYSID, is_controlled=True)
 
         # Simulated LoRa transport (Follower sends back to Leader's port)
         transport = SimulatedLoRaTransport(
