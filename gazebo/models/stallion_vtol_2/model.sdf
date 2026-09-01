@@ -1,0 +1,633 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <!--
+    Flightory Stallion VTOL — Authentic CAD Model & Ultra-Stable Physics
+    ====================================================================
+    - 100% Exact CAD Meshes aligned in Gazebo ENU coordinate system
+    - Wingspan: 1.35 m, Fuselage Length: 0.92 m, Total Mass: ~3.25 kg
+    - Tricopter Tilt-Rotor Geometry (2 Front Tilt + 1 Rear Fixed with Yaw)
+
+    ArduPilot QuadPlane Tricopter Motor Mapping (NED vs ENU):
+      SERVO1 (ch0) = Motor 1 = Front-Right (Y_NED > 0) => fr_motor_joint in Gazebo (Y_ENU < 0) [CCW]
+      SERVO2 (ch1) = Motor 2 = Front-Left  (Y_NED < 0) => fl_motor_joint in Gazebo (Y_ENU > 0) [CW]
+      SERVO3 (ch2) = Motor 4 = Rear                      => rear_motor_joint in Gazebo         [CCW]
+      SERVO4 (ch3) = MotorTilt => fl_tilt_joint & fr_tilt_joint
+      SERVO5 (ch4) = Motor7    => rear_yaw_joint
+  -->
+  <model name="stallion_vtol_2">
+    <pose>0 0 0 0 0 0</pose>
+    <self_collide>false</self_collide>
+
+    <!-- ========================= BASE LINK: AIRFRAME ========================= -->
+    <link name="base_link">
+      <pose>0 0 0 0 0 0</pose>
+      <inertial>
+        <pose>0.029 0 0 0 0 0</pose>
+        <mass>2.50</mass>
+        <inertia>
+          <ixx>0.105</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>0.165</iyy><iyz>0</iyz>
+          <izz>0.255</izz>
+        </inertia>
+      </inertial>
+
+      <!-- Collision: Main Fuselage Belly -->
+      <collision name="fuselage_collision">
+        <pose>-0.17 0 0.01 0 0 0</pose>
+        <geometry>
+          <box><size>0.92 0.16 0.14</size></box>
+        </geometry>
+        <surface>
+          <friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction>
+        </surface>
+      </collision>
+
+      <!-- Collision: Left Wing -->
+      <collision name="wing_left_collision">
+        <pose>0.02 0.32 -0.04 0 0 0</pose>
+        <geometry>
+          <box><size>0.24 0.50 0.03</size></box>
+        </geometry>
+      </collision>
+
+      <!-- Collision: Right Wing -->
+      <collision name="wing_right_collision">
+        <pose>0.02 -0.32 -0.04 0 0 0</pose>
+        <geometry>
+          <box><size>0.24 0.50 0.03</size></box>
+        </geometry>
+      </collision>
+
+      <!-- Visual: Unified Fuselage + V-Tail Assembly -->
+      <visual name="body_cad_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://stallion_vtol/meshes/stallion_body_unified.stl</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+        <material>
+          <ambient>1.0 0.4 0.0 1</ambient>
+          <diffuse>1.0 0.4 0.0 1</diffuse>
+          <specular>0.3 0.3 0.3 1</specular>
+        </material>
+      </visual>
+
+      <!-- Visual: Left Wing + Left Motor Boom -->
+      <visual name="wing_left_cad_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://stallion_vtol/meshes/stallion_wing_left_unified.stl</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1</ambient>
+          <diffuse>0.95 0.95 0.95 1</diffuse>
+          <specular>0.2 0.2 0.2 1</specular>
+        </material>
+      </visual>
+
+      <!-- Visual: Right Wing + Right Motor Boom -->
+      <visual name="wing_right_cad_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://stallion_vtol/meshes/stallion_wing_right_unified.stl</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+        <material>
+          <ambient>0.95 0.95 0.95 1</ambient>
+          <diffuse>0.95 0.95 0.95 1</diffuse>
+          <specular>0.2 0.2 0.2 1</specular>
+        </material>
+      </visual>
+
+      <!-- IMU Sensor: rotated 180 deg roll to match ArduPilot X-forward, Y-right, Z-down -->
+      <sensor name="imu_sensor" type="imu">
+        <pose>0 0 0 3.141593 0 0</pose>
+        <always_on>1</always_on>
+        <update_rate>1000.0</update_rate>
+        <imu>
+          <angular_velocity>
+            <x><noise type="gaussian"><mean>0</mean><stddev>0.00018</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0</mean><stddev>0.00018</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0</mean><stddev>0.00018</stddev></noise></z>
+          </angular_velocity>
+          <linear_acceleration>
+            <x><noise type="gaussian"><mean>0</mean><stddev>0.0018</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0</mean><stddev>0.0018</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0</mean><stddev>0.0018</stddev></noise></z>
+          </linear_acceleration>
+        </imu>
+      </sensor>
+    </link>
+
+    <!-- ==================== FRONT-LEFT TILT MECHANISM ==================== -->
+    <joint name="fl_tilt_joint" type="revolute">
+      <pose relative_to="base_link">0.220 0.306 -0.040 0 0 0</pose>
+      <parent>base_link</parent>
+      <child>fl_tilt_link</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <lower>0.0</lower>
+          <upper>1.5708</upper>
+        </limit>
+        <dynamics><damping>0.05</damping></dynamics>
+      </axis>
+    </joint>
+
+    <link name="fl_tilt_link">
+      <pose relative_to="fl_tilt_joint">0 0 0 0 0 0</pose>
+      <inertial>
+        <mass>0.10</mass>
+        <inertia>
+          <ixx>0.001</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>0.001</iyy><iyz>0</iyz>
+          <izz>0.001</izz>
+        </inertia>
+      </inertial>
+      <visual name="fl_tilt_cad_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://stallion_vtol/meshes/stallion_tilt_mount.stl</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+        <material>
+          <ambient>0.2 0.2 0.2 1</ambient>
+          <diffuse>0.2 0.2 0.2 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <!-- FL Motor Spin Joint (CW from above) -->
+    <joint name="fl_motor_joint" type="revolute">
+      <pose relative_to="fl_tilt_link">0 0 0.035 0 0 0</pose>
+      <parent>fl_tilt_link</parent>
+      <child>fl_motor_link</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <dynamics><damping>0.004</damping></dynamics>
+      </axis>
+    </joint>
+
+    <link name="fl_motor_link">
+      <pose relative_to="fl_motor_joint">0 0 0 0 0 0</pose>
+      <inertial>
+        <mass>0.15</mass>
+        <inertia>
+          <ixx>0.0025</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>0.0025</iyy><iyz>0</iyz>
+          <izz>0.004</izz>
+        </inertia>
+      </inertial>
+      <visual name="fl_motor_visual">
+        <geometry><cylinder><radius>0.022</radius><length>0.035</length></cylinder></geometry>
+        <material><ambient>0.1 0.1 0.1 1</ambient><diffuse>0.1 0.1 0.1 1</diffuse></material>
+      </visual>
+      <visual name="fl_prop_visual">
+        <pose>0 0 0.025 0 0 0</pose>
+        <geometry><box><size>0.28 0.025 0.006</size></box></geometry>
+        <material><ambient>0.15 0.15 0.15 1</ambient><diffuse>0.15 0.15 0.15 1</diffuse></material>
+      </visual>
+    </link>
+
+    <!-- ==================== FRONT-RIGHT TILT MECHANISM ==================== -->
+    <joint name="fr_tilt_joint" type="revolute">
+      <pose relative_to="base_link">0.220 -0.306 -0.040 0 0 0</pose>
+      <parent>base_link</parent>
+      <child>fr_tilt_link</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <lower>0.0</lower>
+          <upper>1.5708</upper>
+        </limit>
+        <dynamics><damping>0.05</damping></dynamics>
+      </axis>
+    </joint>
+
+    <link name="fr_tilt_link">
+      <pose relative_to="fr_tilt_joint">0 0 0 0 0 0</pose>
+      <inertial>
+        <mass>0.10</mass>
+        <inertia>
+          <ixx>0.001</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>0.001</iyy><iyz>0</iyz>
+          <izz>0.001</izz>
+        </inertia>
+      </inertial>
+      <visual name="fr_tilt_cad_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://stallion_vtol/meshes/stallion_tilt_mount.stl</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+        <material>
+          <ambient>0.2 0.2 0.2 1</ambient>
+          <diffuse>0.2 0.2 0.2 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <!-- FR Motor Spin Joint (CCW from above) -->
+    <joint name="fr_motor_joint" type="revolute">
+      <pose relative_to="fr_tilt_link">0 0 0.035 0 0 0</pose>
+      <parent>fr_tilt_link</parent>
+      <child>fr_motor_link</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <dynamics><damping>0.004</damping></dynamics>
+      </axis>
+    </joint>
+
+    <link name="fr_motor_link">
+      <pose relative_to="fr_motor_joint">0 0 0 0 0 0</pose>
+      <inertial>
+        <mass>0.15</mass>
+        <inertia>
+          <ixx>0.0025</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>0.0025</iyy><iyz>0</iyz>
+          <izz>0.004</izz>
+        </inertia>
+      </inertial>
+      <visual name="fr_motor_visual">
+        <geometry><cylinder><radius>0.022</radius><length>0.035</length></cylinder></geometry>
+        <material><ambient>0.1 0.1 0.1 1</ambient><diffuse>0.1 0.1 0.1 1</diffuse></material>
+      </visual>
+      <visual name="fr_prop_visual">
+        <pose>0 0 0.025 0 0 0</pose>
+        <geometry><box><size>0.28 0.025 0.006</size></box></geometry>
+        <material><ambient>0.15 0.15 0.15 1</ambient><diffuse>0.15 0.15 0.15 1</diffuse></material>
+      </visual>
+    </link>
+
+    <!-- ==================== REAR YAW + MOTOR ==================== -->
+    <joint name="rear_yaw_joint" type="revolute">
+      <pose relative_to="base_link">-0.354 0 -0.035 0 0 0</pose>
+      <parent>base_link</parent>
+      <child>rear_yaw_link</child>
+      <axis>
+        <xyz>1 0 0</xyz>
+        <limit>
+          <lower>-0.524</lower>
+          <upper>0.524</upper>
+        </limit>
+        <dynamics><damping>0.05</damping></dynamics>
+      </axis>
+    </joint>
+
+    <link name="rear_yaw_link">
+      <pose relative_to="rear_yaw_joint">0 0 0 0 0 0</pose>
+      <inertial>
+        <mass>0.10</mass>
+        <inertia>
+          <ixx>0.001</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>0.001</iyy><iyz>0</iyz>
+          <izz>0.001</izz>
+        </inertia>
+      </inertial>
+      <visual name="rear_yaw_cad_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://stallion_vtol/meshes/stallion_tail_mount.stl</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+        <material>
+          <ambient>0.2 0.2 0.2 1</ambient>
+          <diffuse>0.2 0.2 0.2 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <!-- Rear Motor Spin Joint (CCW from above) -->
+    <joint name="rear_motor_joint" type="revolute">
+      <pose relative_to="rear_yaw_link">0 0 0.035 0 0 0</pose>
+      <parent>rear_yaw_link</parent>
+      <child>rear_motor_link</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <dynamics><damping>0.004</damping></dynamics>
+      </axis>
+    </joint>
+
+    <link name="rear_motor_link">
+      <pose relative_to="rear_motor_joint">0 0 0 0 0 0</pose>
+      <inertial>
+        <mass>0.15</mass>
+        <inertia>
+          <ixx>0.0025</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>0.0025</iyy><iyz>0</iyz>
+          <izz>0.004</izz>
+        </inertia>
+      </inertial>
+      <visual name="rear_motor_visual">
+        <geometry><cylinder><radius>0.022</radius><length>0.035</length></cylinder></geometry>
+        <material><ambient>0.1 0.1 0.1 1</ambient><diffuse>0.1 0.1 0.1 1</diffuse></material>
+      </visual>
+      <visual name="rear_prop_visual">
+        <pose>0 0 0.025 0 0 0</pose>
+        <geometry><box><size>0.28 0.025 0.006</size></box></geometry>
+        <material><ambient>0.15 0.15 0.15 1</ambient><diffuse>0.15 0.15 0.15 1</diffuse></material>
+      </visual>
+    </link>
+
+    <!-- ======================== SIMULATION PLUGINS ======================== -->
+
+    <plugin name="gz::sim::systems::JointStatePublisher"
+        filename="gz-sim-joint-state-publisher-system">
+    </plugin>
+
+    <!-- Required for ArduPilotPlugin control on all 6 joints -->
+    <plugin filename="gz-sim-apply-joint-force-system"
+        name="gz::sim::systems::ApplyJointForce">
+      <jointName>fl_tilt_joint</jointName>
+    </plugin>
+    <plugin filename="gz-sim-apply-joint-force-system"
+        name="gz::sim::systems::ApplyJointForce">
+      <jointName>fr_tilt_joint</jointName>
+    </plugin>
+    <plugin filename="gz-sim-apply-joint-force-system"
+        name="gz::sim::systems::ApplyJointForce">
+      <jointName>rear_yaw_joint</jointName>
+    </plugin>
+    <plugin filename="gz-sim-apply-joint-force-system"
+        name="gz::sim::systems::ApplyJointForce">
+      <jointName>fl_motor_joint</jointName>
+    </plugin>
+    <plugin filename="gz-sim-apply-joint-force-system"
+        name="gz::sim::systems::ApplyJointForce">
+      <jointName>fr_motor_joint</jointName>
+    </plugin>
+    <plugin filename="gz-sim-apply-joint-force-system"
+        name="gz::sim::systems::ApplyJointForce">
+      <jointName>rear_motor_joint</jointName>
+    </plugin>
+
+    <!-- =================================================================
+         PROP THRUST: LiftDrag Plugins
+         ================================================================= -->
+
+    <!-- FL Motor — CW (negative omega) -->
+    <plugin filename="gz-sim-lift-drag-system" name="gz::sim::systems::LiftDrag">
+      <a0>0.3</a0>
+      <alpha_stall>1.4</alpha_stall>
+      <cla>4.2500</cla>
+      <cda>0.10</cda>
+      <cma>0.00</cma>
+      <cla_stall>-0.025</cla_stall>
+      <cda_stall>0.0</cda_stall>
+      <cma_stall>0.0</cma_stall>
+      <area>0.005</area>
+      <air_density>1.2041</air_density>
+      <cp>0.084 0 0</cp>
+      <forward>0 -1 0</forward>
+      <upward>0 0 1</upward>
+      <link_name>fl_motor_link</link_name>
+    </plugin>
+    <plugin filename="gz-sim-lift-drag-system" name="gz::sim::systems::LiftDrag">
+      <a0>0.3</a0>
+      <alpha_stall>1.4</alpha_stall>
+      <cla>4.2500</cla>
+      <cda>0.10</cda>
+      <cma>0.00</cma>
+      <cla_stall>-0.025</cla_stall>
+      <cda_stall>0.0</cda_stall>
+      <cma_stall>0.0</cma_stall>
+      <area>0.005</area>
+      <air_density>1.2041</air_density>
+      <cp>-0.084 0 0</cp>
+      <forward>0 1 0</forward>
+      <upward>0 0 1</upward>
+      <link_name>fl_motor_link</link_name>
+    </plugin>
+
+    <!-- FR Motor — CCW (positive omega) -->
+    <plugin filename="gz-sim-lift-drag-system" name="gz::sim::systems::LiftDrag">
+      <a0>0.3</a0>
+      <alpha_stall>1.4</alpha_stall>
+      <cla>4.2500</cla>
+      <cda>0.10</cda>
+      <cma>0.00</cma>
+      <cla_stall>-0.025</cla_stall>
+      <cda_stall>0.0</cda_stall>
+      <cma_stall>0.0</cma_stall>
+      <area>0.005</area>
+      <air_density>1.2041</air_density>
+      <cp>0.084 0 0</cp>
+      <forward>0 1 0</forward>
+      <upward>0 0 1</upward>
+      <link_name>fr_motor_link</link_name>
+    </plugin>
+    <plugin filename="gz-sim-lift-drag-system" name="gz::sim::systems::LiftDrag">
+      <a0>0.3</a0>
+      <alpha_stall>1.4</alpha_stall>
+      <cla>4.2500</cla>
+      <cda>0.10</cda>
+      <cma>0.00</cma>
+      <cla_stall>-0.025</cla_stall>
+      <cda_stall>0.0</cda_stall>
+      <cma_stall>0.0</cma_stall>
+      <area>0.005</area>
+      <air_density>1.2041</air_density>
+      <cp>-0.084 0 0</cp>
+      <forward>0 -1 0</forward>
+      <upward>0 0 1</upward>
+      <link_name>fr_motor_link</link_name>
+    </plugin>
+
+    <!-- Rear Motor — CCW (positive omega) -->
+    <plugin filename="gz-sim-lift-drag-system" name="gz::sim::systems::LiftDrag">
+      <a0>0.3</a0>
+      <alpha_stall>1.4</alpha_stall>
+      <cla>4.2500</cla>
+      <cda>0.10</cda>
+      <cma>0.00</cma>
+      <cla_stall>-0.025</cla_stall>
+      <cda_stall>0.0</cda_stall>
+      <cma_stall>0.0</cma_stall>
+      <area>0.005</area>
+      <air_density>1.2041</air_density>
+      <cp>0.084 0 0</cp>
+      <forward>0 1 0</forward>
+      <upward>0 0 1</upward>
+      <link_name>rear_motor_link</link_name>
+    </plugin>
+    <plugin filename="gz-sim-lift-drag-system" name="gz::sim::systems::LiftDrag">
+      <a0>0.3</a0>
+      <alpha_stall>1.4</alpha_stall>
+      <cla>4.2500</cla>
+      <cda>0.10</cda>
+      <cma>0.00</cma>
+      <cla_stall>-0.025</cla_stall>
+      <cda_stall>0.0</cda_stall>
+      <cma_stall>0.0</cma_stall>
+      <area>0.005</area>
+      <air_density>1.2041</air_density>
+      <cp>-0.084 0 0</cp>
+      <forward>0 -1 0</forward>
+      <upward>0 0 1</upward>
+      <link_name>rear_motor_link</link_name>
+    </plugin>
+
+    <!-- Wing Aerodynamics for forward flight -->
+    <plugin filename="gz-sim-lift-drag-system" name="gz::sim::systems::LiftDrag">
+      <a0>0.05</a0>
+      <alpha_stall>0.3491</alpha_stall>
+      <cla>5.0</cla>
+      <cda>0.02</cda>
+      <cma>0.0</cma>
+      <cla_stall>-0.2</cla_stall>
+      <cda_stall>1.0</cda_stall>
+      <cma_stall>0.0</cma_stall>
+      <area>0.18</area>
+      <air_density>1.2041</air_density>
+      <cp>0 0 0</cp>
+      <forward>1 0 0</forward>
+      <upward>0 0 1</upward>
+      <link_name>base_link</link_name>
+    </plugin>
+
+    <!-- =================================================================
+         ArduPilot JSON FDM Interface Plugin
+         ================================================================= -->
+    <plugin name="ArduPilotPlugin"
+        filename="libArduPilotPlugin.so">
+      <fdm_addr>127.0.0.1</fdm_addr>
+      <fdm_port_in>9012</fdm_port_in>
+      <connectionTimeoutMaxCount>5</connectionTimeoutMaxCount>
+      <lock_step>1</lock_step>
+      <no_time_sync>1</no_time_sync>
+      <have_32_channels>0</have_32_channels>
+
+      <modelXYZToAirplaneXForwardZDown degrees="true">0 0 0 180 0 0</modelXYZToAirplaneXForwardZDown>
+      <gazeboXYZToNED degrees="true">0 0 0 180 0 0</gazeboXYZToNED>
+
+      <imuName>imu_sensor</imuName>
+
+      <!-- ch0: SERVO1 = Motor 1 = Front-Right in NED => fr_motor_joint in Gazebo — CCW -->
+      <control channel="0">
+        <jointName>fr_motor_joint</jointName>
+        <useForce>1</useForce>
+        <multiplier>838</multiplier>
+        <offset>0</offset>
+        <servo_min>1000</servo_min>
+        <servo_max>2000</servo_max>
+        <type>VELOCITY</type>
+        <p_gain>0.20</p_gain>
+        <i_gain>0</i_gain>
+        <d_gain>0</d_gain>
+        <i_max>0</i_max>
+        <i_min>0</i_min>
+        <cmd_max>2.5</cmd_max>
+        <cmd_min>-2.5</cmd_min>
+        <controlVelocitySlowdownSim>1</controlVelocitySlowdownSim>
+      </control>
+
+      <!-- ch1: SERVO2 = Motor 2 = Front-Left in NED => fl_motor_joint in Gazebo — CW -->
+      <control channel="1">
+        <jointName>fl_motor_joint</jointName>
+        <useForce>1</useForce>
+        <multiplier>-838</multiplier>
+        <offset>0</offset>
+        <servo_min>1000</servo_min>
+        <servo_max>2000</servo_max>
+        <type>VELOCITY</type>
+        <p_gain>0.20</p_gain>
+        <i_gain>0</i_gain>
+        <d_gain>0</d_gain>
+        <i_max>0</i_max>
+        <i_min>0</i_min>
+        <cmd_max>2.5</cmd_max>
+        <cmd_min>-2.5</cmd_min>
+        <controlVelocitySlowdownSim>1</controlVelocitySlowdownSim>
+      </control>
+
+      <!-- ch2: SERVO3 = Motor 4 = Rear Motor => rear_motor_joint in Gazebo — CCW -->
+      <control channel="2">
+        <jointName>rear_motor_joint</jointName>
+        <useForce>1</useForce>
+        <multiplier>838</multiplier>
+        <offset>0</offset>
+        <servo_min>1000</servo_min>
+        <servo_max>2000</servo_max>
+        <type>VELOCITY</type>
+        <p_gain>0.20</p_gain>
+        <i_gain>0</i_gain>
+        <d_gain>0</d_gain>
+        <i_max>0</i_max>
+        <i_min>0</i_min>
+        <cmd_max>2.5</cmd_max>
+        <cmd_min>-2.5</cmd_min>
+        <controlVelocitySlowdownSim>1</controlVelocitySlowdownSim>
+      </control>
+
+      <!-- ch3: Tilt Servo -->
+      <control channel="3">
+        <jointName>fl_tilt_joint</jointName>
+        <useForce>1</useForce>
+        <multiplier>1.5708</multiplier>
+        <offset>0</offset>
+        <servo_min>1000</servo_min>
+        <servo_max>2000</servo_max>
+        <type>POSITION</type>
+        <p_gain>10.0</p_gain>
+        <i_gain>0.0</i_gain>
+        <d_gain>0.5</d_gain>
+        <i_max>0.0</i_max>
+        <i_min>0.0</i_min>
+        <cmd_max>10.0</cmd_max>
+        <cmd_min>-10.0</cmd_min>
+        <cmd_offset>0</cmd_offset>
+      </control>
+
+      <control channel="3">
+        <jointName>fr_tilt_joint</jointName>
+        <useForce>1</useForce>
+        <multiplier>1.5708</multiplier>
+        <offset>0</offset>
+        <servo_min>1000</servo_min>
+        <servo_max>2000</servo_max>
+        <type>POSITION</type>
+        <p_gain>10.0</p_gain>
+        <i_gain>0.0</i_gain>
+        <d_gain>0.5</d_gain>
+        <i_max>0.0</i_max>
+        <i_min>0.0</i_min>
+        <cmd_max>10.0</cmd_max>
+        <cmd_min>-10.0</cmd_min>
+        <cmd_offset>0</cmd_offset>
+      </control>
+
+      <!-- ch4: Rear Yaw Servo -->
+      <control channel="4">
+        <jointName>rear_yaw_joint</jointName>
+        <useForce>1</useForce>
+        <multiplier>-0.524</multiplier>
+        <offset>-0.5</offset>
+        <servo_min>1000</servo_min>
+        <servo_max>2000</servo_max>
+        <type>POSITION</type>
+        <p_gain>10.0</p_gain>
+        <i_gain>0.0</i_gain>
+        <d_gain>0.5</d_gain>
+        <i_max>0.0</i_max>
+        <i_min>0.0</i_min>
+        <cmd_max>10.0</cmd_max>
+        <cmd_min>-10.0</cmd_min>
+        <cmd_offset>0</cmd_offset>
+      </control>
+
+    </plugin>
+  </model>
+</sdf>
