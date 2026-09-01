@@ -179,21 +179,29 @@ class FollowerNode(SwarmNode):
     def _execute_task(self, task: TaskMessage) -> None:
         """
         Execute INVESTIGATE_AND_LAND task:
-            1. Arm Drone 2
-            2. Navigate to target (GUIDED)
-            3. Land (QLAND)
-            4. Send TASK_COMPLETE
+            1. Arm Drone 2 in QLOITER mode
+            2. VTOL climb to target altitude
+            3. Navigate to target (GUIDED)
+            4. Land (QLAND)
+            5. Send TASK_COMPLETE
         """
         cfg = get_config()
 
         print(f"\n[FOLLOWER] ── EXECUTING TASK {task.task_id} ──────────────")
 
-        # 1. Arm
-        print(f"[FOLLOWER] Arming Drone 2 ...")
+        # 1. Switch to QLOITER & Arm
+        print(f"[FOLLOWER] Switching to QLOITER & Arming Drone 2 ...")
+        self.drone.set_mode("QLOITER")
+        time.sleep(1.0)
         self.drone.arm(force=True)
         time.sleep(2.0)
 
-        # 2. Navigate to target
+        # 2. VTOL Takeoff
+        print(f"[FOLLOWER] VTOL Climb to {task.altitude:.1f}m ...")
+        self.drone.takeoff(alt=max(10.0, task.altitude))
+        time.sleep(4.0)
+
+        # 3. Navigate to target
         print(f"[FOLLOWER] Navigating to target: "
               f"{task.latitude:.7f}, {task.longitude:.7f} @ {task.altitude:.1f}m")
         self.drone.goto(task.latitude, task.longitude, task.altitude)

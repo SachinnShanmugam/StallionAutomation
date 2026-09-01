@@ -155,6 +155,27 @@ class MAVLinkDrone:
         print(f"[MAV] ARM command sent to SYSID={self.expected_sysid}")
         return True
 
+    def takeoff(self, alt: float = 15.0) -> bool:
+        """Command VTOL takeoff to target altitude in meters."""
+        if not self._mav:
+            return False
+        with self._lock:
+            self._mav.mav.command_long_send(
+                self.expected_sysid, 1,
+                mavutil.mavlink.MAV_CMD_NAV_TAKEOFF,
+                0,
+                0, 0, 0, 0, 0, 0,
+                alt,
+            )
+            # Send vertical climb throttle pulse (1750 µs)
+            self._mav.mav.rc_channels_override_send(
+                self.expected_sysid, 1,
+                1500, 1500, 1750, 1500,
+                65535, 65535, 65535, 65535
+            )
+        print(f"[MAV] TAKEOFF command sent → alt={alt:.1f}m (SYSID={self.expected_sysid})")
+        return True
+
     def goto(self, lat: float, lon: float, alt: float) -> bool:
         """
         Send SET_POSITION_TARGET_GLOBAL_INT in GUIDED mode.
@@ -163,7 +184,7 @@ class MAVLinkDrone:
         if not self._mav:
             return False
 
-        # Switch to GUIDED first
+        # Switch to GUIDED mode
         self.set_mode("GUIDED")
         time.sleep(0.5)
 
