@@ -142,15 +142,20 @@ class FollowerNode(SwarmNode):
         d_lon_m = (my_lon - leader_lon) * 111139.0 * math.cos(math.radians(leader_lat))
         actual_dist = math.hypot(d_lat_m, d_lon_m)
 
-        # Auto-launch Follower if Leader is airborne and Follower is on ground
-        if (leader_alt > 2.0 or state.flight_mode in ("QLOITER", "QHOVER", "AUTO", "GUIDED")) and not self.drone.armed:
-            print("\n[FOLLOWER] Leader is airborne! Auto-launching Drone 2 into formation...")
+        # Only launch Follower if Leader is ACTUALLY in the air (alt > 2.5m)
+        if leader_alt > 2.5 and not self.drone.armed:
+            print(f"\n[FOLLOWER] Leader is airborne (Alt = {leader_alt:.1f}m)! Launching Drone 2 into formation...")
             self.drone.set_mode("QLOITER")
             self.drone.arm(force=True)
             self.drone.set_throttle(1750)
 
+        # If Leader lands (alt < 1.0m) and Follower is still in the air, Follower lands too
+        elif leader_alt < 1.0 and self.drone.armed and my_alt > 2.0:
+            print("\n[FOLLOWER] Leader has landed. Follower initiating landing...")
+            self.drone.land()
+
         # If airborne, track formation waypoint
-        if self.drone.armed:
+        if self.drone.armed and leader_alt > 2.0:
             if my_alt < target_alt - 1.0:
                 self.drone.set_throttle(1680)
             elif my_alt > target_alt + 1.0:
@@ -160,11 +165,14 @@ class FollowerNode(SwarmNode):
             self.drone.track_target(target_lat, target_lon, target_alt, yaw=heading)
 
         now = time.time()
-        if now - self._last_tracking_log >= 2.0 and (leader_alt > 1.0 or self.drone.armed):
-            print(f"\n[FOLLOWER]")
-            print(f"Leader detected: {leader_lat:.6f}, {leader_lon:.6f} | Alt: {leader_alt:.1f}m | Heading: {heading:05.1f}°")
-            print(f"Distance to Leader: {actual_dist:.1f}m (Desired: 20.0m behind)")
-            print(f"Tracking Target   : {target_lat:.6f}, {target_lon:.6f} @ {target_alt:.1f}m | Tracking: OK")
+        if now - self._last_tracking_log >= 2.0:
+            if leader_alt > 2.0 or self.drone.armed:
+                print(f"\n[FOLLOWER]")
+                print(f"Leader detected: {leader_lat:.6f}, {leader_lon:.6f} | Alt: {leader_alt:.1f}m | Heading: {heading:05.1f}°")
+                print(f"Distance to Leader: {actual_dist:.1f}m (Desired: 20.0m behind)")
+                print(f"Tracking Target   : {target_lat:.6f}, {target_lon:.6f} @ {target_alt:.1f}m | Tracking: OK")
+            else:
+                print(f"[FOLLOWER] Standby on runway. Waiting for Leader (SYSID=1) to take off...")
             self._last_tracking_log = now
 
     # ── Task handling ────────────────────────────────────────────────────────
