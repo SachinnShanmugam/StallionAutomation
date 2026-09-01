@@ -3,7 +3,6 @@
 # SYSID_THISMAV = 2  (Follower in Swarm V1)
 # Tilt-Tricopter: 2 Front Tilt + 1 Rear Fixed with Yaw Servo
 # ============================================================
-# Based on stallion_vtol_sitl.parm with SYSID override for Drone 2
 
 # ==========================================
 # SWARM IDENTITY — DRONE 2
@@ -66,7 +65,7 @@ Q_LAND_SPEED        50
 Q_TAKEOFF_ALT       10
 Q_VELZ_MAX          150
 
-# AUTO mode vertical speed limits
+# AUTO mode vertical speed limits (ArduPlane 4.7: m/s and m/s^2)
 Q_WP_SPD            1.5
 Q_WP_SPD_UP         0.8
 Q_WP_SPD_DN         0.8
@@ -76,6 +75,17 @@ Q_WP_RADIUS_M       3.0
 
 # ==========================================
 # 8. SERVO / MOTOR MAPPING
+#    ArduPlane QuadPlane Tri with Tilt
+#    JSON FDM channel = SERVO number - 1
+#
+#    SERVO1 -> ch0 -> Motor 1 FL/Gazebo = FrontRight/NED  (CW)
+#    SERVO2 -> ch1 -> Motor 2 FR/Gazebo = FrontLeft/NED   (CCW)
+#    SERVO3 -> ch2 -> Motor 4 Rear                        (CCW)
+#    SERVO4 -> ch3 -> Tilt Servo (both front motors)
+#    SERVO5 -> ch4 -> Rear Yaw Servo
+#    SERVO6 -> ch5 -> Aileron
+#    SERVO7 -> ch6 -> Elevator
+#    SERVO8 -> ch7 -> Rudder
 # ==========================================
 SERVO1_FUNCTION     33
 SERVO2_FUNCTION     34
@@ -86,10 +96,12 @@ SERVO6_FUNCTION     4
 SERVO7_FUNCTION     19
 SERVO8_FUNCTION     21
 
+# Tilt servo: PWM 1000 = hover (vertical), PWM 2000 = cruise (forward)
 SERVO4_MIN          1000
 SERVO4_MAX          2000
 SERVO4_TRIM         1000
 
+# Rear yaw servo: PWM 1500 = center, +-15 deg
 SERVO5_MIN          1000
 SERVO5_MAX          2000
 SERVO5_TRIM         1500
@@ -101,10 +113,12 @@ Q_M_THST_HOVER      0.42
 # ==========================================
 # 9. HOVER PID TUNING
 # ==========================================
+# Angle Controller Stiffness
 Q_A_ANG_RLL_P       6.0
 Q_A_ANG_PIT_P       6.0
 Q_A_ANG_YAW_P       2.5
 
+# Rate Controllers & Low-Pass Filters
 Q_A_RAT_RLL_P       0.25
 Q_A_RAT_RLL_I       0.25
 Q_A_RAT_RLL_D       0.004
@@ -120,10 +134,12 @@ Q_A_RAT_YAW_I       0.05
 Q_A_RAT_YAW_D       0.002
 Q_A_RAT_YAW_FLTD    10.0
 
+# QLOITER Smoothness
 Q_LOIT_ANG_MAX      15
 Q_LOIT_SPEED_MS     5.0
 Q_LOIT_ACC_MAX_M    2.5
 
+# AUTO VTOL navigation limits (ArduPlane 4.7)
 Q_A_ANGLE_MAX       15.0
 Q_A_RATE_WPY_MAX    20.0
 Q_A_RATE_Y_MAX      25.0
@@ -142,6 +158,7 @@ RTL_RADIUS          80
 # ==========================================
 ARMING_CHECK        0
 
+# IMU — single instance, correct body-frame orientation
 INS_USE1            1
 INS_USE2            0
 INS_USE3            0
@@ -149,21 +166,29 @@ INS_ENABLE2         0
 INS_ENABLE3         0
 AHRS_ORIENTATION    0
 
+# Compass — enabled for SITL simulation
 COMPASS_ENABLE      1
 COMPASS_USE         1
 COMPASS_USE2        0
 COMPASS_USE3        0
 SIM_COMPASS_ENA     1
 
+# Simulated battery — BAT_MONITOR=0 disables voltage monitoring
+# (prevents false 0V failsafe in Gazebo SITL)
 SIM_BATT_VOLTAGE    16.8
 BAT_MONITOR         0
 
+# VTOL Return-to-Launch
 Q_RTL_MODE          3
+
+# SITL physics loop — QuadPlane needs >= 400 Hz
 SCHED_LOOP_RATE     400
 
+# EKF3 only
 EK3_ENABLE          1
 EK2_ENABLE          0
 AHRS_EKF_TYPE       3
 
+# Disable fence for testing
 FENCE_ENABLE        0
 INS_GYRO_FILTER     20
