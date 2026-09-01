@@ -80,6 +80,26 @@ class FollowerNode(SwarmNode):
         self._filt_target_lat: Optional[float] = None
         self._filt_target_lon: Optional[float] = None
 
+        # CSV Metrics Logger
+        import os
+        os.makedirs("logs", exist_ok=True)
+        self._log_file_path = "logs/formation_metrics.csv"
+        self._init_csv_log()
+
+    def _init_csv_log(self) -> None:
+        try:
+            with open(self._log_file_path, "w") as f:
+                f.write("time,leader_lat,leader_lon,leader_alt,leader_hdg,leader_vx,leader_vy,follower_lat,follower_lon,follower_alt,follower_hdg,target_lat,target_lon,target_alt,actual_dist,desired_dist,dist_error,alt_error\n")
+        except Exception:
+            pass
+
+    def _log_metric_row(self, row_str: str) -> None:
+        try:
+            with open(self._log_file_path, "a") as f:
+                f.write(row_str + "\n")
+        except Exception:
+            pass
+
     def start_and_connect(self, timeout: float = 30.0) -> bool:
         """Connect MAVLink and start background threads."""
         print(f"\n[FOLLOWER] Connecting to Drone 2 SITL ...")
@@ -154,23 +174,30 @@ class FollowerNode(SwarmNode):
         leader_lon = state.longitude
         leader_alt = state.altitude
         heading    = state.heading
+        vx         = state.vx
+        vy         = state.vy
+        vz         = state.vz
 
-        # Formation offset: 20 meters behind Leader along heading vector
+        # Velocity Feedforward (lookahead tau = 0.5s compensating for 2 Hz LoRa transport latency)
+        tau = 0.5
         offset_dist = 20.0
         rad_heading = math.radians(heading)
-        d_north = -offset_dist * math.cos(rad_heading)
-        d_east  = -offset_dist * math.sin(rad_heading)
+        d_north = -offset_dist * math.cos(rad_heading) + (vx * tau)
+        d_east  = -offset_dist * math.sin(rad_heading) + (vy * tau)
 
         # Convert metric offsets to GPS coordinates
         target_lat = leader_lat + (d_north / 111139.0)
         target_lon = leader_lon + (d_east / (111139.0 * math.cos(math.radians(leader_lat))))
-        target_alt = max(8.0, leader_alt)
+        target_alt = max(8.0, leader_alt + (vz * tau))
 
-        # Compute actual distance between Follower and Leader
+        # Compute actual distance and errors
         my_lat, my_lon, my_alt = self.drone.position
+        my_hdg = self.drone.heading
         d_lat_m = (my_lat - leader_lat) * 111139.0
         d_lon_m = (my_lon - leader_lon) * 111139.0 * math.cos(math.radians(leader_lat))
         actual_dist = math.hypot(d_lat_m, d_lon_m)
+        dist_error  = actual_dist - offset_dist
+        alt_error   = my_alt - leader_alt
 
         # Auto-launch Follower if Leader is ACTUALLY in the air (alt > 2.5m)
         if leader_alt > 2.5 and not self.drone.armed and not self._is_launching:
@@ -193,13 +220,20 @@ class FollowerNode(SwarmNode):
 
             self.drone.track_target(self._filt_target_lat, self._filt_target_lon, target_alt)
 
+            # Log data row to CSV
+            row = f"{time.time():.3f},{leader_lat:.7f},{leader_lon:.7f},{leader_alt:.2f},{heading:.1f},{vx:.2f},{vy:.2f},{my_lat:.7f},{my_lon:.7f},{my_alt:.2f},{my_hdg:.1f},{self._filt_target_lat:.7f},{self._filt_target_lon:.7f},{target_alt:.2f},{actual_dist:.2f},{offset_dist:.1f},{dist_error:.2f},{alt_error:.2f}"
+            self._log_metric_row(row)
+
         now = time.time()
         if now - self._last_tracking_log >= 2.0:
             if leader_alt > 2.0 or self.drone.armed:
-                print(f"\n[FOLLOWER]")
-                print(f"Leader detected: {leader_lat:.6f}, {leader_lon:.6f} | Alt: {leader_alt:.1f}m | Heading: {heading:05.1f}°")
-                print(f"Distance to Leader: {actual_dist:.1f}m (Desired: 20.0m behind)")
-                print(f"Tracking Target   : {target_lat:.6f}, {target_lon:.6f} @ {target_alt:.1f}m | Tracking: OK")
+                spd_mps = math.hypot(vx, vy)
+                print(f"\n[FOLLOWER METRICS]")
+                print(f"  Leader State     : {leader_lat:.6f}, {leader_lon:.6f} | Alt: {leader_alt:.1f}m | Hdg: {heading:05.1f}° | Vel: {spd_mps:.1f} m/s")
+                print(f"  Distance Error   : {actual_dist:.1f}m (Desired: {offset_dist:.1f}m | Error: {dist_error:+.1f}m)")
+                print(f"  Altitude Error   : Follower: {my_alt:.1f}m vs Leader: {leader_alt:.1f}m (Error: {alt_error:+.1f}m)")
+                print(f"  Target Waypoint  : {self._filt_target_lat or target_lat:.6f}, {self._filt_target_lon or target_lon:.6f} @ {target_alt:.1f}m")
+                print(f"  Mode / Status    : {self.drone.mode} | Feedforward: {'ACTIVE' if spd_mps > 0.3 else 'HOVER'}")
             else:
                 print(f"[FOLLOWER] Standby on runway. Waiting for Leader (SYSID=1) to take off...")
             self._last_tracking_log = now
